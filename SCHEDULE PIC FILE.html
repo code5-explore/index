@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Scheduled Picture Display</title>
+<style>
+  /* Reset & base */
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #121212;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  h1 {
+    margin-bottom: 1rem;
+    font-weight: 700;
+    text-align: center;
+    color: #4ade80;
+  }
+  #picture-container {
+    width: 100%;
+    max-width: 350px;
+    height: 500px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 0 20px #22c55eaa;
+    position: relative;
+    background: #222;
+  }
+  #picture-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 12px;
+    transition: opacity 1s ease-in-out;
+    position: absolute;
+    top: 0; left: 0;
+  }
+  #schedule-info {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    color: #aaa;
+    text-align: center;
+  }
+  @media screen and (max-width: 380px) {
+    #picture-container {
+      height: 400px;
+      max-width: 320px;
+    }
+  }
+</style>
+</head>
+<body>
+  <h1>Scheduled Picture Display</h1>
+  <div id="picture-container">
+    <!-- Images appear here -->
+  </div>
+  <div id="schedule-info"></div>
+
+<script>
+  /*
+   * Picture scheduler:
+   * Change pictures on a schedule (every X seconds per picture).
+   * The pictures array contains objects with url and displayDuration (seconds).
+   */
+
+  const pictures = [
+    { url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80', displayDuration: 5 },
+    { url: 'https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=800&q=80', displayDuration: 7 },
+    { url: 'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=800&q=80', displayDuration: 6 },
+    { url: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80', displayDuration: 8 }
+  ];
+
+  const container = document.getElementById('picture-container');
+  const info = document.getElementById('schedule-info');
+
+  let currentIndex = 0;
+  let timeoutId = null;
+
+  // Preload images for smooth transitions
+  function preloadImages(arr) {
+    arr.forEach(pic => {
+      const img = new Image();
+      img.src = pic.url;
+    });
+  }
+
+  // Create img elements for all pictures, initially hidden
+  function createImageElements(arr) {
+    arr.forEach((pic, idx) => {
+      const imgEl = document.createElement('img');
+      imgEl.src = pic.url;
+      imgEl.style.opacity = '0';
+      imgEl.style.zIndex = (idx === 0) ? 2 : 1;
+      container.appendChild(imgEl);
+      pic.imgEl = imgEl;
+    });
+  }
+
+  // Show picture at index with fade effect
+  function showPicture(idx) {
+    pictures.forEach((pic, i) => {
+      if (i === idx) {
+        pic.imgEl.style.opacity = '1';
+        pic.imgEl.style.zIndex = 2;
+      } else {
+        pic.imgEl.style.opacity = '0';
+        pic.imgEl.style.zIndex = 1;
+      }
+    });
+    info.textContent = `Showing picture ${idx + 1} of ${pictures.length} for ${pictures[idx].displayDuration} seconds`;
+  }
+
+  // Schedule the picture changes recursively
+  function scheduleNext() {
+    showPicture(currentIndex);
+    timeoutId = setTimeout(() => {
+      currentIndex = (currentIndex + 1) % pictures.length;
+      scheduleNext();
+    }, pictures[currentIndex].displayDuration * 1000);
+  }
+
+  // Initialize
+  preloadImages(pictures);
+  createImageElements(pictures);
+  scheduleNext();
+
+  // Optional: allow user to pause/resume on touch for mobile users (UX)
+  let paused = false;
+  container.addEventListener('click', () => {
+    if (paused) {
+      scheduleNext();
+      paused = false;
+      info.textContent = `Resumed schedule at picture ${currentIndex + 1}`;
+    } else {
+      clearTimeout(timeoutId);
+      paused = true;
+      info.textContent = `Paused at picture ${currentIndex + 1}. Tap to resume.`;
+    }
+  });
+
+</script>
+
+</body>
+</html>
+
+
