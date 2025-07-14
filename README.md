@@ -1,1 +1,1 @@
-This is an experimental school register for ten students, created using HTML, CSS and Brython.
+A space for HTML, CSS, javascript and Brython exploration
