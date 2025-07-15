@@ -1,1 +1,1 @@
-A space for HTML, CSS, javascript and Brython exploration
+A space for HTML, CSS, Javascript and Brython exploration
