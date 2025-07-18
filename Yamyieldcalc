@@ -1,1 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yam Yield Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .range-indicator {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-amber-50">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-green-800 mb-2">Yam Yield Calculator</h1>
+            <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/0eadb9cb-b85c-4e31-a81e-986f7bf9f044.png" alt="Field of healthy yam plants with lush green leaves under a clear blue sky, showing the typical growth pattern of yam vines" class="mx-auto rounded-lg shadow-md mb-4" />
+            <p class="text-gray-700">Estimate your potential yam harvest based on farm parameters and management practices</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Input Form -->
+            <div class="md:col-span-2 bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold text-green-700 mb-4 border-b pb-2">Farm Parameters</h2>
+                
+                <form id="yieldCalculator" class="space-y-4">
+                    <!-- Basic Farm Information -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="farmArea" class="block text-sm font-medium text-gray-700">
+                                Farm Area (m²)
+                                <span class="tooltip ml-1">ℹ️
+                                    <span class="tooltiptext">Total area of your yam farm in square meters</span>
+                                </span>
+                            </label>
+                            <input type="number" id="farmArea" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" min="100" step="1" required>
+                        </div>
+
+                        <div>
+                            <label for="plantingSpace" class="block text-sm font-medium text-gray-700">
+                                Planting Space (m)
+                                <span class="tooltip ml-1">ℹ️
+                                    <span class="tooltiptext">Distance between yam stands in meters (typically 1m × 1m)</span>
+                                </span>
+                            </label>
+                            <input type="number" id="plantingSpace" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" min="0.5" max="3" step="0.1" value="1" required>
+                            <div class="range-indicator text-xs text-gray-500 mt-1">
+                                <span>Close (0.5m)</span>
+                                <span>Standard (1m)</span>
+                                <span>Wide (3m)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Yam Variety -->
+                    <div>
+                        <label for="yamType" class="block text-sm font-medium text-gray-700">
+                            Yam Type
+                            <span class="tooltip ml-1">ℹ️
+                                <span class="tooltiptext">Different yam varieties have different yield potentials</span>
+                            </span>
+                        </label>
+                        <select id="yamType" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" required>
+                            <option value="water_yam">Water Yam (Dioscorea alata)</option>
+                            <option value="white_yam" selected>White Yam (Dioscorea rotundata)</option>
+                            <option value="yellow_yam">Yellow Yam (Dioscorea cayenensis)</option>
+                            <option value="bitter_yam">Bitter Yam (Dioscorea dumetorum)</option>
+                            <option value="chinese_yam">Chinese Yam (Dioscorea opposita)</option>
+                        </select>
+                    </div>
+
+                    <!-- Soil Parameters -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="soilType" class="block text-sm font-medium text-gray-700">
+                                Soil Type
+                                <span class="tooltip ml-1">ℹ️
+                                    <span class="tooltiptext">Soil texture affects water retention and root development</span>
+                                </span>
+                            </label>
+                            <select id="soilType" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" required>
+                                <option value="loamy">Loamy</option>
+                                <option value="sandy">Sandy</option>
+                                <option value="clay">Clay</option>
+                                <option value="silty">Silty</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="soilBulkDensity" class="block text-sm font-medium text-gray-700">
+                                Soil Bulk Density (g/cm³)
+                                <span class="tooltip ml-1">ℹ️
+                                    <span class="tooltiptext">Soil compactness measure (typical range: 1.1-1.6 g/cm³)</span>
+                                </span>
+                            </label>
+                            <input type="number" id="soilBulkDensity" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" min="0.8" max="2.0" step="0.01" value="1.3" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="moistureContent" class="block text-sm font-medium text-gray-700">
+                                Gravimetric Moisture Content (%)
+                                <span class="tooltip ml-1">ℹ️
+                                    <span class="tooltiptext">Percentage of water in the soil by weight</span>
+                                </span>
+                            </label>
+                            <input type="number" id="moistureContent" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" min="5" max="50" step="0.1" value="25" required>
+                        </div>
+
+                        <div>
+                            <label for="heapType" class="block text-sm font-medium text-gray-700">
+                                Type of Heap
+                                <span class="tooltip ml-1">ℹ️
+                                    <span class="tooltiptext">Mound shape affects tuber development</span>
+                                </span>
+                            </label>
+                            <select id="heapType" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" required>
+                                <option value="0" selected>No heap (flat)</option>
+                                <option value="1">Small mound (30cm)</option>
+                                <option value="2">Standard mound (60cm)</option>
+                                <option value="3">Large mound (90cm)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Soil Nutrients -->
+                    <div>
+                        <h3 class="text-lg font-medium text-green-700 mb-2">Soil Nutrient Levels</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label for="soilNitrogen" class="block text-sm font-medium text-gray-700">
+                                    Nitrogen (mg/kg)
+                                </label>
+                                <input type="number" id="soilNitrogen" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" min="0" step="1" value="20" required>
+                            </div>
+                            <div>
+                                <label for="soilPhosphorus" class="block text-sm font-medium text-gray-700">
+                                    Phosphorus (mg/kg)
+                                </label>
+                                <input type="number" id="soilPhosphorus" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" min="0" step="1" value="15" required>
+                            </div>
+                            <div>
+                                <label for="soilPotassium" class="block text-sm font-medium text-gray-700">
+                                    Potassium (mg/kg)
+                                </label>
+                                <input type="number" id="soilPotassium" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" min="0" step="1" value="100" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="micronutrients" class="block text-sm font-medium text-gray-700">
+                                Micronutrient Index (1-5)
+                                <span class="tooltip ml-1">ℹ️
+                                    <span class="tooltiptext">Combined measure of Zn, Fe, B, Mn, Cu (1=low, 5=high)</span>
+                                </span>
+                            </label>
+                            <input type="range" id="micronutrients" class="mt-1 block w-full" min="1" max="5" step="1" value="3">
+                            <div class="range-indicator text-xs text-gray-500 mt-1">
+                                <span>1 (Low)</span>
+                                <span>2</span>
+                                <span>3 (Avg)</span>
+                                <span>4</span>
+                                <span>5 (High)</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="weeding" class="block text-sm font-medium text-gray-700">
+                                Weeding Frequency
+                                <span class="tooltip ml-1">ℹ️
+                                    <span class="tooltiptext">Number of weeding cycles during growing season</span>
+                                </span>
+                            </label>
+                            <select id="weeding" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" required>
+                                <option value="1">None or minimal (1×)</option>
+                                <option value="2">Moderate (2×)</option>
+                                <option value="3" selected>Regular (3×)</option>
+                                <option value="4">Intensive (4×)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Management Practices -->
+                    <div>
+                        <label for="managementPractice" class="block text-sm font-medium text-gray-700">
+                            Management Practice
+                            <span class="tooltip ml-1">ℹ️
+                                <span class="tooltiptext">Quality of overall farm management practices</span>
+                            </span>
+                        </label>
+                        <select id="managementPractice" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" required>
+                            <option value="1">Basic (low input)</option>
+                            <option value="2" selected>Standard</option>
+                            <option value="3">Improved</option>
+                            <option value="4">High-tech (optimal conditions)</option>
+                        </select>
+                    </div>
+
+                    <div class="pt-4">
+                        <button type="button" onclick="calculateYield()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-md transition duration-300">
+                            Calculate Yam Yield
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="bg-green-50 p-6 rounded-lg shadow-md border border-green-200">
+                <h2 class="text-xl font-semibold text-green-700 mb-4 border-b pb-2">Yield Estimation</h2>
+                <div id="results" class="space-y-6">
+                    <div class="text-center py-10">
+                        <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/ff0c3b8e-df4f-4ae4-8be5-743886f8db19.png" alt="Graphic placeholder for yam yield results showing potential tuber sizes and quantities" class="mx-auto mb-4" />
+                        <p class="text-gray-600">Enter your farm parameters and click "Calculate Yam Yield" to see your estimated harvest</p>
+                    </div>
+
+                    <div id="yieldResults" class="hidden space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-white p-3 rounded-md shadow-sm">
+                                <p class="text-xs font-medium text-gray-500">Total Plants</p>
+                                <p id="totalPlants" class="text-xl font-bold text-green-700">-</p>
+                            </div>
+                            <div class="bg-white p-3 rounded-md shadow-sm">
+                                <p class="text-xs font-medium text-gray-500">Yield per Plant</p>
+                                <p id="yieldPerPlant" class="text-xl font-bold text-green-700">-</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-green-100 p-4 rounded-md border border-green-200 text-center">
+                            <p class="text-xs font-medium text-gray-700">Estimated Total Yield</p>
+                            <p id="totalYield" class="text-3xl font-bold text-green-800 mt-1">- kg</p>
+                            <p id="yieldPerArea" class="text-sm text-gray-600 mt-1">- kg/m²</p>
+                        </div>
+
+                        <div class="bg-white p-4 rounded-md shadow-sm">
+                            <p class="text-sm font-medium text-gray-700 mb-2">Yield Factors</p>
+                            <div class="space-y-2">
+                                <div>
+                                    <span class="text-xs text-gray-500">Soil Quality:</span>
+                                    <span id="soilQuality" class="text-xs font-medium ml-1">-</span>
+                                    <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                        <div id="soilQualityBar" class="bg-green-600 h-1.5 rounded-full" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-gray-500">Management Impact:</span>
+                                    <span id="managementImpact" class="text-xs font-medium ml-1">-</span>
+                                    <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                        <div id="managementImpactBar" class="bg-green-600 h-1.5 rounded-full" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-gray-500">Rainfall Adequacy:</span>
+                                    <span id="rainfallAdequacy" class="text-xs font-medium ml-1">-</span>
+                                    <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                        <div id="rainfallAdequacyBar" class="bg-green-600 h-1.5 rounded-full" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-3 rounded-md shadow-sm text-center">
+                            <button onclick="showRecommendations()" class="text-green-600 hover:text-green-800 text-sm font-medium">
+                                Show Improvement Recommendations
+                            </button>
+                            <div id="recommendations" class="hidden mt-3 text-left text-sm text-gray-700">
+                                <!-- Recommendations will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Coefficients for different yam types (kg/plant basis)
+        const YAM_COEFFICIENTS = {
+            water_yam: { baseYield: 2.5, soilImpact: 0.8, moistureSensitivity: 1.2 },
+            white_yam: { baseYield: 3.0, soilImpact: 1.0, moistureSensitivity: 1.0 },
+            yellow_yam: { baseYield: 2.8, soilImpact: 0.9, moistureSensitivity: 1.1 },
+            bitter_yam: { baseYield: 2.0, soilImpact: 0.7, moistureSensitivity: 0.9 },
+            chinese_yam: { baseYield: 3.2, soilImpact: 0.9, moistureSensitivity: 1.0 }
+        };
+
+        // Soil type multipliers
+        const SOIL_MULTIPLIERS = {
+            loamy: 1.1,
+            sandy: 0.8,
+            clay: 0.9,
+            silty: 1.0
+        };
+
+        // Management practice multipliers
+        const MANAGEMENT_MULTIPLIERS = [0.7, 1.0, 1.3, 1.6];
+
+        // Weeding frequency multipliers
+        const WEEDING_MULTIPLIERS = {
+            1: 0.6,
+            2: 0.8,
+            3: 1.0,
+            4: 1.1
+        };
+
+        // Heap type multipliers
+        const HEAP_MULTIPLIERS = [0.8, 0.9, 1.0, 1.1];
+
+        function calculateYield() {
+            // Get all input values
+            const farmArea = parseFloat(document.getElementById('farmArea').value);
+            const plantingSpace = parseFloat(document.getElementById('plantingSpace').value);
+            const yamType = document.getElementById('yamType').value;
+            const soilType = document.getElementById('soilType').value;
+            const soilBulkDensity = parseFloat(document.getElementById('soilBulkDensity').value);
+            const moistureContent = parseFloat(document.getElementById('moistureContent').value);
+            const soilNitrogen = parseFloat(document.getElementById('soilNitrogen').value);
+            const soilPhosphorus = parseFloat(document.getElementById('soilPhosphorus').value);
+            const soilPotassium = parseFloat(document.getElementById('soilPotassium').value);
+            const micronutrients = parseInt(document.getElementById('micronutrients').value);
+            const heapType = parseInt(document.getElementById('heapType').value);
+            const managementPractice = parseInt(document.getElementById('managementPractice').value);
+            const weeding = parseInt(document.getElementById('weeding').value);
+
+            // Validate inputs
+            if (isNaN(farmArea) || farmArea <= 0) {
+                alert('Please enter a valid farm area');
+                return;
+            }
+
+            // Calculate the number of plants
+            const plantsPerSqM = 1 / (plantingSpace * plantingSpace);
+            const totalPlants = Math.floor(farmArea * plantsPerSqM);
+
+            // Get base yield for yam type
+            const yamCoefficients = YAM_COEFFICIENTS[yamType];
+            let yieldPerPlant = yamCoefficients.baseYield;
+
+            // Apply soil type multiplier
+            yieldPerPlant *= SOIL_MULTIPLIERS[soilType];
+
+            // Apply bulk density adjustment (optimum around 1.3 g/cm³)
+            const bulkDensityAdjustment = 1 - 0.1 * Math.abs(soilBulkDensity - 1.3);
+            yieldPerPlant *= bulkDensityAdjustment;
+
+            // Apply moisture content adjustment (optimum 25%)
+            const moistureAdjustment = 1 - 0.01 * Math.abs(moistureContent - 25);
+            yieldPerPlant *= moistureAdjustment * yamCoefficients.moistureSensitivity;
+
+            // Apply nutrient adjustments
+            const nitrogenAdjustment = 0.8 + (soilNitrogen / 100);
+            const phosphorusAdjustment = 0.8 + (soilPhosphorus / 50);
+            const potassiumAdjustment = 0.9 + (soilPotassium / 200);
+            const micronutrientAdjustment = 0.7 + (micronutrients * 0.1);
+
+            yieldPerPlant *= (nitrogenAdjustment + phosphorusAdjustment + potassiumAdjustment + micronutrientAdjustment) / 4;
+
+            // Apply management practices
+            yieldPerPlant *= MANAGEMENT_MULTIPLIERS[managementPractice - 1];
+
+            // Apply weeding frequency
+            yieldPerPlant *= WEEDING_MULTIPLIERS[weeding];
+
+            // Apply heap type
+            yieldPerPlant *= HEAP_MULTIPLIERS[heapType];
+
+            // Calculate total yield
+            const totalYield = totalPlants * yieldPerPlant;
+            const yieldPerSqM = totalYield / farmArea;
+
+            // Update results display
+            document.getElementById('totalPlants').textContent = totalPlants.toLocaleString();
+            document.getElementById('yieldPerPlant').textContent = yieldPerPlant.toFixed(2) + ' kg';
+            document.getElementById('totalYield').textContent = Math.round(totalYield).toLocaleString() + ' kg';
+            document.getElementById('yieldPerArea').textContent = yieldPerSqM.toFixed(2) + ' kg/m²';
+
+            // Update quality indicators
+            const soilQualityScore = ((nitrogenAdjustment + phosphorusAdjustment + potassiumAdjustment + micronutrientAdjustment) / 4) * 100;
+            document.getElementById('soilQuality').textContent = Math.round(soilQualityScore) + '%';
+            document.getElementById('soilQualityBar').style.width = soilQualityScore + '%';
+
+            const managementScore = (MANAGEMENT_MULTIPLIERS[managementPractice - 1] * 100) / 1.6;
+            document.getElementById('managementImpact').textContent = Math.round(managementScore) + '%';
+            document.getElementById('managementImpactBar').style.width = managementScore + '%';
+
+            const rainfallScore = moistureAdjustment * 100;
+            document.getElementById('rainfallAdequacy').textContent = Math.round(rainfallScore) + '%';
+            document.getElementById('rainfallAdequacyBar').style.width = rainfallScore + '%';
+
+            // Show results
+            document.getElementById('yieldResults').classList.remove('hidden');
+        }
+
+        function showRecommendations() {
+            const recommendations = document.getElementById('recommendations');
+            const yamType = document.getElementById('yamType').value;
+            const soilType = document.getElementById('soilType').value;
+            const managementPractice = parseInt(document.getElementById('managementPractice').value);
+            const weeding = parseInt(document.getElementById('weeding').value);
+            
+            let advice = '<ul class="list-disc pl-5 space-y-2">';
+            
+            // General advice
+            advice += '<li>Maintain soil pH between 5.5 and 6.5 for optimal yam growth</li>';
+            
+            // Yam type specific advice
+            switch(yamType) {
+                case 'water_yam':
+                    advice += '<li>White yam benefits from more frequent irrigation than other varieties</li>';
+                    break;
+                case 'white_yam':
+                    advice += '<li>Apply potassium-rich fertilizer during tuber bulking stage</li>';
+                    break;
+                case 'yellow_yam':
+                    advice += '<li>Yellow yam requires well-drained soil to prevent tuber rot</li>';
+                    break;
+            }
+            
+            // Soil type advice
+            if (soilType === 'sandy') {
+                advice += '<li>Add organic matter to improve water retention in sandy soils</li>';
+            } else if (soilType === 'clay') {
+                advice += '<li>Consider ridge planting in clay soils to improve drainage</li>';
+            }
+            
+            // Management advice
+            if (managementPractice < 3) {
+                advice += '<li>Improving your management practices (e.g., crop rotation, proper spacing) could increase yields by 20-30%</li>';
+            }
+            
+            // Weeding advice
+            if (weeding < 3) {
+                advice += '<li>Increase weeding frequency to at least 3 times during the growing season to reduce competition</li>';
+            }
+            
+            advice += '</ul>';
+            
+            recommendations.innerHTML = advice;
+            recommendations.classList.toggle('hidden');
+        }
+    </script>
+</body>
+</html>
+
 
