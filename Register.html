@@ -1,1 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Register</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    <style>
+        .attendance-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .attendance-table th, .attendance-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        .attendance-table th {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+        }
+        .attendance-table tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .attendance-table tr:hover {
+            background-color: #e6f7e6;
+        }
+        .container {
+            max-width: 95%;
+            margin: 20px auto;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            background-color: white;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+        input[type="checkbox"] {
+            transform: scale(1.5);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container">
+        <div class="header">
+            <h1 class="text-2xl font-bold text-gray-800">Student Attendance Register</h1>
+            <div class="date-selector flex items-center gap-4">
+                <label for="week-date" class="font-medium">Select Week:</label>
+                <input type="week" id="week-date" class="px-3 py-2 border rounded">
+            </div>
+        </div>
+
+        <table class="attendance-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Mon</th>
+                    <th>Tue</th>
+                    <th>Wed</th>
+                    <th>Thu</th>
+                    <th>Fri</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody id="attendance-body">
+                <!-- Rows will be populated by JavaScript -->
+            </tbody>
+        </table>
+
+        <div class="button-group mt-4 flex gap-4 justify-center">
+            <button id="save-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">Save</button>
+            <button id="clear-btn" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Clear</button>
+            <button id="export-btn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Export to Excel</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Constants
+            const TOTAL_STUDENTS = 10;
+            const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri'];
+            
+            // DOM Elements
+            const attendanceBody = document.getElementById('attendance-body');
+            const saveBtn = document.getElementById('save-btn');
+            const clearBtn = document.getElementById('clear-btn');
+            const exportBtn = document.getElementById('export-btn');
+            const weekDateInput = document.getElementById('week-date');
+            
+            // Current date handling
+            const today = new Date();
+            const currentWeek = getWeekNumber(today);
+            weekDateInput.value = `${today.getFullYear()}-W${currentWeek}`;
+            
+            // Initialize the table
+            initializeTable();
+            
+            // Load saved data if available
+            loadSavedData();
+            
+            // Event listeners
+            attendanceBody.addEventListener('change', updateTotals);
+            saveBtn.addEventListener('click', saveDataToLocalStorage);
+            clearBtn.addEventListener('click', clearData);
+            exportBtn.addEventListener('click', exportToExcel);
+            weekDateInput.addEventListener('change', function() {
+                loadSavedData();
+            });
+            
+            // Initialize functions
+            function initializeTable() {
+                for (let i = 1; i <= TOTAL_STUDENTS; i++) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>Student ${i}</td>
+                        ${DAYS.map(day => `<td><input type="checkbox" class="attendance-check" data-student="${i}" data-day="${day}"></td>`).join('')}
+                        <td class="total-cell" data-student="${i}">0</td>
+                    `;
+                    attendanceBody.appendChild(row);
+                }
+            }
+            
+            function updateTotals(event) {
+                if (event.target.classList.contains('attendance-check')) {
+                    const studentId = event.target.getAttribute('data-student');
+                    calculateStudentTotal(studentId);
+                }
+            }
+            
+            function calculateStudentTotal(studentId) {
+                const checkboxes = document.querySelectorAll(`.attendance-check[data-student="${studentId}"]`);
+                let total = 0;
+                
+                checkboxes.forEach(checkbox => {
+                    if (checkbox.checked) {
+                        total++;
+                    }
+                });
+                
+                document.querySelector(`.total-cell[data-student="${studentId}"]`).textContent = total;
+            }
+            
+            function saveDataToLocalStorage() {
+                const currentWeek = getSelectedWeek();
+                const attendanceData = {
+                    date: currentWeek,
+                    students: {}
+                };
+                
+                for (let i = 1; i <= TOTAL_STUDENTS; i++) {
+                    attendanceData.students[i] = {};
+                    DAYS.forEach(day => {
+                        const checkbox = document.querySelector(`.attendance-check[data-student="${i}"][data-day="${day}"]`);
+                        attendanceData.students[i][day] = checkbox.checked;
+                    });
+                }
+                
+                localStorage.setItem(`attendance_${currentWeek}`, JSON.stringify(attendanceData));
+                alert('Attendance data saved successfully!');
+            }
+            
+            function loadSavedData() {
+                const currentWeek = getSelectedWeek();
+                const savedData = localStorage.getItem(`attendance_${currentWeek}`);
+                
+                if (savedData) {
+                    const attendanceData = JSON.parse(savedData);
+                    
+                    for (let i = 1; i <= TOTAL_STUDENTS; i++) {
+                        if (attendanceData.students[i]) {
+                            DAYS.forEach(day => {
+                                const checkbox = document.querySelector(`.attendance-check[data-student="${i}"][data-day="${day}"]`);
+                                if (checkbox) {
+                                    checkbox.checked = attendanceData.students[i][day] || false;
+                                }
+                            });
+                            calculateStudentTotal(i);
+                        }
+                    }
+                } else {
+                    clearCheckboxes();
+                }
+            }
+            
+            function clearData() {
+                if (confirm('Are you sure you want to clear all attendance data for this week?')) {
+                    clearCheckboxes();
+                    const currentWeek = getSelectedWeek();
+                    localStorage.removeItem(`attendance_${currentWeek}`);
+                }
+            }
+            
+            function clearCheckboxes() {
+                document.querySelectorAll('.attendance-check').forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                
+                document.querySelectorAll('.total-cell').forEach(cell => {
+                    cell.textContent = '0';
+                });
+            }
+            
+            function exportToExcel() {
+                const wb = XLSX.utils.book_new();
+                const wsData = [];
+                
+                // Add headers
+                wsData.push(['Name', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Total']);
+                
+                // Add student data
+                for (let i = 1; i <= TOTAL_STUDENTS; i++) {
+                    const row = [`Student ${i}`];
+                    let total = 0;
+                    
+                    DAYS.forEach(day => {
+                        const checkbox = document.querySelector(`.attendance-check[data-student="${i}"][data-day="${day}"]`);
+                        const status = checkbox.checked ? 'Present' : 'Absent';
+                        row.push(status);
+                        if (checkbox.checked) total++;
+                    });
+                    
+                    row.push(total);
+                    wsData.push(row);
+                }
+                
+                const ws = XLSX.utils.aoa_to_sheet(wsData);
+                XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+                
+                const currentWeek = getSelectedWeek();
+                XLSX.writeFile(wb, `Attendance_${currentWeek}.xlsx`);
+            }
+            
+            function getSelectedWeek() {
+                return weekDateInput.value;
+            }
+            
+            function getWeekNumber(d) {
+                // Copy date so don't modify original
+                d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+                // Set to nearest Thursday: current date + 4 - current day number
+                // Make Sunday's day number 7
+                d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+                // Get first day of year
+                const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+                // Calculate full weeks to nearest Thursday
+                const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+                // Return array of year and week number
+                return weekNo;
+            }
+        });
+    </script>
+</body>
+</html>
 
