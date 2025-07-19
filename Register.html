@@ -71,8 +71,111 @@
 <script src="https://cdn.jsdelivr.net/npm/brython@3.10.5/brython_stdlib.min.js"></script>
 </head>
 <body onload="brython()">
-<h1>Attendance Register </h1>
-  <p> Name: Babatunde Oladejo <br> Record Week/Month/Year: 5/June/2025 </p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Attendance Register</title>
+<style>
+  body {
+    background-color: grey;
+    margin: 0;
+    padding: 1rem;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  h1 {
+    text-align: center;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+  .info-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 1rem;
+  }
+  .info-form label {
+    font-weight: bold;
+    font-size: 0.9rem;
+  }
+  input[type="text"], input[type="number"] {
+    width: 95%;
+    border-radius: 3px;
+    border: none;
+    padding: 5px;
+    font-size: 0.9rem;
+  }
+  .generate-btn {
+    grid-column: 1 / -1;
+    padding: 8px 15px;
+    font-size: 1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    background: #4CAF50;
+    color: white;
+    cursor: pointer;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 0.9rem;
+  }
+  th, td {
+    border: 1px solid white;
+    padding: 5px 3px;
+    text-align: center;
+    vertical-align: middle;
+  }
+  input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+  }
+  #download-btn {
+    display: block;
+    margin: 10px auto 0;
+    padding: 8px 15px;
+    font-size: 1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    background: white;
+    color: red;
+    cursor: pointer;
+    width: 100%;
+  }
+  #download-btn:hover { background: #ddd; }
+  div.table-container {
+    overflow-x: auto;
+    max-height: 450px;
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/brython@3.10.5/brython.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/brython@3.10.5/brython_stdlib.min.js"></script>
+</head>
+<body onload="brython()">
+<h1>Attendance Register</h1>
+
+<div class="info-form">
+  <label for="teacher-name">Name:</label>
+  <input type="text" id="teacher-name" value="Babatunde Oladejo">
+  
+  <label for="record-info">Record Period:</label>
+  <input type="text" id="record-info" value="Week 5 / June / 2025">
+
+  <label for="num-students">Number of Students:</label>
+  <input type="number" id="num-students" value="10" min="1" max="50">
+
+  <button id="generate-btn" class="generate-btn">Generate / Clear Table</button>
+</div>
+
 <div class="table-container">
 <table id="register-table" aria-label="Student attendance register">
   <thead>
@@ -83,7 +186,7 @@
       <th>Wed</th>
       <th>Thu</th>
       <th>Fri</th>
-      <th style="width:30px;">Total</th>
+      <th style="width:40px;">Total</th>
     </tr>
   </thead>
   <tbody id="table-body">
@@ -94,92 +197,172 @@
 <button id="download-btn">Download Excel</button>
 
 <script type="text/python">
-from browser import document, html, window
+from browser import document, html, window, local_storage
+import json ## NEW: Import the json library
 
 WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+STORAGE_KEY = 'attendanceRegisterState' ## NEW: A key for localStorage
+num_students = 0
 
-def calculate_total(row):
+## NEW: Function to save the entire table state to localStorage
+def save_state():
+    global num_students
+    state = {
+        'teacher_name': document['teacher-name'].value,
+        'record_info': document['record-info'].value,
+        'num_students': document['num-students'].value,
+        'students': []
+    }
+    for i in range(num_students):
+        student_data = {
+            'name': document[f'{i}_name'].value,
+            'attendance': {}
+        }
+        for day in WEEKDAYS:
+            student_data['attendance'][day] = document[f'{i}_cb_{day}'].checked
+        state['students'].append(student_data)
+    
+    local_storage.storage[STORAGE_KEY] = json.dumps(state)
+
+## NEW: Function to load the state from localStorage
+def load_state():
+    if STORAGE_KEY in local_storage.storage:
+        state = json.loads(local_storage.storage[STORAGE_KEY])
+        
+        # Restore header info
+        document['teacher-name'].value = state.get('teacher_name', '')
+        document['record-info'].value = state.get('record_info', '')
+        document['num-students'].value = state.get('num_students', 10)
+        
+        # Generate table based on saved number of students
+        generate_table(None) 
+        
+        # Populate the generated table with saved data
+        for i, student_data in enumerate(state.get('students', [])):
+            if i < num_students: # Make sure we don't go out of bounds
+                document[f'{i}_name'].value = student_data.get('name', f'Student {i+1}')
+                for day, is_checked in student_data.get('attendance', {}).items():
+                    document[f'{i}_cb_{day}'].checked = is_checked
+                calculate_total(i) # Update the total count for the row
+
+    else:
+        # If no saved state, just generate a default table
+        generate_table(None)
+
+def calculate_total(row_index):
     total = 0
     for day in WEEKDAYS:
-        checkbox = document[f'{row}_cb_{day}']
+        checkbox = document[f'{row_index}_cb_{day}']
         if checkbox.checked:
             total += 1
-    total_cell = document[f'{row}_total']
+    total_cell = document[f'{row_index}_total']
     total_cell.text = str(total)
 
-def on_checkbox_change(ev):
+def on_input_change(ev):
+    ## NEW: This handler now covers both checkboxes and text inputs
     checkbox = ev.target
-    # checkbox id example: 3_cb_Mon
-    row = checkbox.id.split('_')[0]
-    calculate_total(row)
+    row_index = checkbox.id.split('_')[0]
+    # Check if the changed element was a checkbox to calculate total
+    if 'cb' in checkbox.id:
+        calculate_total(row_index)
+    save_state() # Save state on any change
 
 def create_row(index):
     row_id = str(index)
     tr = html.TR()
-    # Name input cell
+    
     name_input = html.INPUT(type="text", id=f'{row_id}_name', value=f'Student {index+1}')
-    td_name = html.TD(name_input)
-    tr <= td_name
+    ## NEW: Bind the 'input' event on the name field to save changes as user types
+    name_input.bind('input', on_input_change)
+    tr <= html.TD(name_input)
 
-    # Weekday checkboxes cells
     for day in WEEKDAYS:
         cb = html.INPUT(type="checkbox", id=f'{row_id}_cb_{day}')
-        cb.bind('change', on_checkbox_change)
-        td_cb = html.TD(cb)
-        tr <= td_cb
+        ## NEW: Use the unified 'on_input_change' handler
+        cb.bind('change', on_input_change)
+        tr <= html.TD(cb)
 
-    # Total attendance cell
-    td_total = html.TD('0', id=f'{row_id}_total')
-    tr <= td_total
+    tr <= html.TD('0', id=f'{row_id}_total')
     return tr
 
+def generate_table(ev):
+    global num_students
+    ## NEW: If called by button click, clear the storage for a "fresh start"
+    if ev is not None:
+        local_storage.storage.pop(STORAGE_KEY, None)
+        document['teacher-name'].value = "Babatunde Oladejo" # Reset defaults
+        document['record-info'].value = "Week 5 / June / 2025"
+    
+    try:
+        num_students = int(document['num-students'].value)
+    except (ValueError, TypeError):
+        num_students = 10
+    
+    tbody = document['table-body']
+    tbody.clear()
+    for i in range(num_students):
+        tr = create_row(i)
+        tbody <= tr
+
 def download_csv(ev):
+    # This function remains the same as before, no changes needed here.
+    # It reads the current state from the DOM, which is always up-to-date.
     rows = []
-    # Header row
+    teacher_name = document['teacher-name'].value.strip()
+    record_info = document['record-info'].value.strip()
+    rows.append([f"Name: {teacher_name}"])
+    rows.append([f"Record Period: {record_info}"])
+    rows.append([])
+    
     header = ['Name'] + WEEKDAYS + ['Total Attendance']
     rows.append(header)
-    for i in range(10):
+
+    for i in range(num_students):
         row_id = str(i)
         name = document[f'{row_id}_name'].value.strip()
-        attendance = []
-        total = 0
-        for day in WEEKDAYS:
-            cb = document[f'{row_id}_cb_{day}']
-            present = 'Yes' if cb.checked else 'No'
-            attendance.append(present)
-            if cb.checked:
-                total += 1
-        data_row = [name] + attendance + [str(total)]
-        rows.append(data_row)
-    # Convert to CSV text
-    csv_text = ''
-    for row in rows:
-        # Escape commas by quotes
-        escaped = [f'"{col}"' if ',' in col else col for col in row]
-        csv_text += ','.join(escaped) + '\r\n'
+        attendance = ['Present' if document[f'{row_id}_cb_{day}'].checked else 'Absent' for day in WEEKDAYS]
+        total = document[f'{row_id}_total'].text
+        rows.append([name] + attendance + [total])
+        
+    csv_text = '\r\n'.join([','.join([f'"{str(col)}"' if ',' in str(col) else str(col) for col in row]) for row in rows])
 
-    # Create a blob and download using JS
     blob = window.Blob.new([csv_text], { "type": "text/csv;charset=utf-8;" })
     url = window.URL.createObjectURL(blob)
     a = document.createElement('a')
     a.href = url
-    a.download = 'student_register.csv'
+    a.download = 'attendance_register.csv'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     window.URL.revokeObjectURL(url)
 
 def main():
-    tbody = document['table-body']
-    for i in range(10):
-        tr = create_row(i)
-        tbody <= tr
-    # Attach download button event
+    ## NEW: Change the main logic to load from storage first.
+    # The "Generate" button now acts as a "Clear and Reset" button.
+    document['generate-btn'].bind('click', generate_table)
     document['download-btn'].bind('click', download_csv)
+    # Bind the top input fields to save state as well
+    document['teacher-name'].bind('input', lambda ev: save_state())
+    document['record-info'].bind('input', lambda ev: save_state())
+    document['num-students'].bind('input', lambda ev: save_state())
+
+    load_state()
 
 main()
 </script>
 </body>
 </html>
+Use code with caution.
+Html
+Summary of Changes
+Import json and local_storage: We need these modules to handle data serialization and browser storage.
+STORAGE_KEY: A constant variable holds the name of our key in localStorage to avoid typos.
+save_state() function: This new function reads all relevant data from the form (header info, student names, and checkbox states), bundles it into a Python dictionary, converts it to a JSON string, and saves it to localStorage.
+load_state() function: This function runs on page load. It checks for our STORAGE_KEY. If found, it loads the JSON string, parses it, and then populates the entire form with the saved data. It then calls generate_table and updates the values and totals. If not found, it just generates a default table.
+Unified Event Handler (on_input_change): A single function now handles changes from both checkboxes and name inputs. It calls save_state() after every modification, ensuring the stored data is always current.
+Updated main() function: The main function now calls load_state() instead of generate_table() directly. This makes loading saved data the default behavior.
+"Generate / Clear" Button: The "Generate" button's behavior is slightly changed. Clicking it now explicitly clears the saved state, providing the user with a way to start fresh.
+50.0s
+
 
 
