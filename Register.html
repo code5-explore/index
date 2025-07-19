@@ -352,17 +352,6 @@ main()
 </script>
 </body>
 </html>
-Use code with caution.
-Html
-Summary of Changes
-Import json and local_storage: We need these modules to handle data serialization and browser storage.
-STORAGE_KEY: A constant variable holds the name of our key in localStorage to avoid typos.
-save_state() function: This new function reads all relevant data from the form (header info, student names, and checkbox states), bundles it into a Python dictionary, converts it to a JSON string, and saves it to localStorage.
-load_state() function: This function runs on page load. It checks for our STORAGE_KEY. If found, it loads the JSON string, parses it, and then populates the entire form with the saved data. It then calls generate_table and updates the values and totals. If not found, it just generates a default table.
-Unified Event Handler (on_input_change): A single function now handles changes from both checkboxes and name inputs. It calls save_state() after every modification, ensuring the stored data is always current.
-Updated main() function: The main function now calls load_state() instead of generate_table() directly. This makes loading saved data the default behavior.
-"Generate / Clear" Button: The "Generate" button's behavior is slightly changed. Clicking it now explicitly clears the saved state, providing the user with a way to start fresh.
-50.0s
 
 
 
