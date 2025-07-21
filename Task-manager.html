@@ -1,1 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Task Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f5f5f5;
+    }
+    .task-complete {
+      text-decoration: line-through;
+      color: #888;
+    }
+    .priority-high {
+      border-left: 4px solid #ef4444;
+    }
+    .priority-medium {
+      border-left: 4px solid #f59e0b;
+    }
+    .priority-low {
+      border-left: 4px solid #10b981;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-3xl mx-auto">
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold text-gray-800 mb-2">Task Manager</h1>
+      <p class="text-lg text-gray-600">Manage your daily tasks effectively</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+      <div class="flex gap-4 mb-2">
+        <input type="text" id="taskInput" placeholder="Enter a new task..." 
+               class="flex-grow px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+        <button id="addTaskBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition">
+          Add Task
+        </button>
+      </div>
+      
+      <div class="flex items-center gap-6 mb-4">
+        <div>
+          <label for="prioritySelect" class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+          <select id="prioritySelect" class="px-3 py-1 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 outline-none">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        
+        <div class="flex items-center">
+          <button id="clearCompleted" class="text-gray-600 hover:text-gray-900 underline text-sm">Clear completed tasks</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="taskList" class="space-y-3">
+      <!-- Tasks will be added here dynamically -->
+    </div>
+
+    <div class="mt-8 text-center text-gray-500 text-sm">
+      <p><span id="tasksCount">0</span> tasks (<span id="completedCount">0</span> completed)</p>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // DOM Elements
+      const taskInput = document.getElementById('taskInput');
+      const addTaskBtn = document.getElementById('addTaskBtn');
+      const taskList = document.getElementById('taskList');
+      const prioritySelect = document.getElementById('prioritySelect');
+      const clearCompleted = document.getElementById('clearCompleted');
+      const tasksCount = document.getElementById('tasksCount');
+      const completedCount = document.getElementById('completedCount');
+
+      // Load tasks from localStorage
+      let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+      
+      // Render tasks
+      function renderTasks() {
+        taskList.innerHTML = '';
+        
+        if (tasks.length === 0) {
+          taskList.innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+              <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/de1c103d-bf12-43c9-b16f-87041fd753c3.png" alt="Empty task list illustration showing a clipboard with no items" class="mx-auto mb-4 rounded-lg">
+              <p>No tasks yet. Add one above to get started!</p>
+            </div>
+          `;
+        } else {
+          tasks.forEach((task, index) => {
+            const taskElement = document.createElement('div');
+            taskElement.className = `bg-white rounded-lg shadow-sm p-4 flex items-center justify-between ${task.priority ? `priority-${task.priority}` : ''}`;
+            taskElement.innerHTML = `
+              <div class="flex items-center">
+                <input type="checkbox" ${task.completed ? 'checked' : ''} 
+                       class="mr-3 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 task-checkbox"
+                       data-index="${index}">
+                <span class="${task.completed ? 'task-complete' : ''}">${task.text}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs px-2 py-1 rounded ${getPriorityBadgeColor(task.priority)}">
+                  ${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
+                </span>
+                <button class="delete-task text-gray-400 hover:text-red-500 transition" data-index="${index}">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            `;
+            taskList.appendChild(taskElement);
+          });
+        }
+        
+        updateTaskCounts();
+      }
+      
+      function getPriorityBadgeColor(priority) {
+        switch(priority) {
+          case 'high': return 'bg-red-100 text-red-800';
+          case 'medium': return 'bg-yellow-100 text-yellow-800';
+          case 'low': return 'bg-green-100 text-green-800';
+          default: return 'bg-gray-100 text-gray-800';
+        }
+      }
+      
+      function updateTaskCounts() {
+        const totalTasks = tasks.length;
+        const completedTasks = tasks.filter(task => task.completed).length;
+        
+        tasksCount.textContent = totalTasks;
+        completedCount.textContent = completedTasks;
+      }
+      
+      function saveTasks() {
+        localStorage.setItem('tasks', JSON.stringify(tasks));
+      }
+      
+      // Add new task
+      addTaskBtn.addEventListener('click', function() {
+        const text = taskInput.value.trim();
+        if (text) {
+          tasks.push({
+            text,
+            completed: false,
+            priority: prioritySelect.value
+          });
+          saveTasks();
+          renderTasks();
+          taskInput.value = '';
+        }
+      });
+      
+      // Allow adding task with Enter key
+      taskInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          addTaskBtn.click();
+        }
+      });
+
+      // Mark task as complete/incomplete
+      taskList.addEventListener('change', function(e) {
+        if (e.target.classList.contains('task-checkbox')) {
+          const index = e.target.dataset.index;
+          tasks[index].completed = e.target.checked;
+          saveTasks();
+          renderTasks();
+        }
+      });
+      
+      // Delete task
+      taskList.addEventListener('click', function(e) {
+        if (e.target.classList.contains('delete-task') || e.target.closest('.delete-task')) {
+          const index = e.target.dataset.index || e.target.closest('.delete-task').dataset.index;
+          tasks.splice(index, 1);
+          saveTasks();
+          renderTasks();
+        }
+      });
+      
+      // Clear completed tasks
+      clearCompleted.addEventListener('click', function() {
+        tasks = tasks.filter(task => !task.completed);
+        saveTasks();
+        renderTasks();
+      });
+      
+      // Initial render
+      renderTasks();
+    });
+  </script>
+</body>
+</html>
+
 
