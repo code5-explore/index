@@ -31,28 +31,29 @@
   footer {
     font-size: smaller;
   }
-.bounce {
-  animation: bounce 1s ease;
+
+.pulse {
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
-@keyframes bounce {
-  0%, 20%, 50%, 80%, 100% {
-    transform: translateY(0); 
+@keyframes pulse {
+  0% {
+    transform: scale(1);
   }
-  40% {
-    transform: translateY(-30px); 
+  50% {
+    transform: scale(1.1); 
   }
-  60% {
-    transform: translateY(-15px); 
+  100% {
+    transform: scale(1);
   }
-  }
+}
   </style>
 </head>
   <body>
     <header>
     <img src = "2025071612423601.png" style= "width: 70px;
       height: 70px float: center;">
-  <h1 class = "bounce"> Hello there! Welcome to Code-5-explore </h1>
+  <h1 class = "pulse"> Hello there! Welcome to Code-5-explore </h1>
     </header>
     <main>
   <p>This space is managed by Babatunde Oladejo, and Code-5-explore 
