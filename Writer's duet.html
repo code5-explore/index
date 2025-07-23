@@ -1,1 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writer's Duel: Human vs AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .typing {
+            animation: pulse 1.5s infinite;
+        }
+        .progress-ring__circle {
+            transition: stroke-dashoffset 0.35s;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <div class="mb-4">
+                <img src="https://placehold.co/800x200" alt="Writer's Duel banner showing human and robot facing off across a parchment with quill and wires, dramatic lighting, digital art style" class="mx-auto rounded-lg shadow-lg" />
+            </div>
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">Writer's Duel</h1>
+            <p class="text-xl text-gray-600">Human Creativity vs AI Efficiency</p>
+        </header>
+
+        <!-- Game Controls -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 p-4 bg-white rounded-lg shadow">
+            <div class="flex items-center mb-4 md:mb-0">
+                <div class="relative mr-3">
+                    <svg class="progress-ring w-16 h-16" viewbox="0 0 64 64">
+                        <circle class="text-gray-200" stroke-width="4" stroke="currentColor" fill="transparent" r="28" cx="32" cy="32" />
+                        <circle class="progress-ring__circle text-blue-500" stroke-width="4" stroke="currentColor" fill="transparent" r="28" cx="32" cy="32" />
+                    </svg>
+                    <div id="timerDisplay" class="absolute inset-0 flex items-center justify-center text-xl font-bold text-gray-800">180</div>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-gray-700">Time Remaining</h3>
+                    <div class="text-xs text-gray-500">3 minute challenge</div>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                 <button id="startBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow transition-colors duration-200 transform hover:scale-105">
+                    START DUEL
+                </button>
+                <button id="gradeBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg shadow transition-colors duration-200 hidden">
+                    GRADE DUEL
+                </button>
+            </div>
+            
+            <div class="flex items-center mt-4 md:mt-0">
+                <div class="text-center mr-4">
+                    <div id="humanGlobalScore" class="text-2xl font-bold text-gray-800">0</div>
+                    <div class="text-xs text-gray-500">Your Score</div>
+                </div>
+                <div class="text-center">
+                    <div id="aiGlobalScore" class="text-2xl font-bold text-gray-800">0</div>
+                    <div class="text-xs text-gray-500">AI Score</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Topic Input -->
+        <div class="mb-8 bg-white p-4 rounded-lg shadow">
+            <label for="topicInput" class="block text-lg font-semibold text-gray-700 mb-2 text-center">Enter the Duel Topic</label>
+            <input type="text" id="topicInput" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="e.g., The future of space exploration...">
+        </div>
+
+        <!-- Writing Areas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <!-- Human Writer -->
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="bg-blue-600 p-3">
+                    <h2 class="text-xl font-bold text-white">Human Writer</h2>
+                </div>
+                <div class="p-4 h-96 flex flex-col">
+                    <p id="humanTopicDisplay" class="font-semibold text-center mb-2 text-gray-700 h-6"></p>
+                    <textarea id="humanText" class="w-full flex-grow p-3 border border-gray-200 rounded resize-none focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type your essay here once the duel begins..." disabled></textarea>
+                    <div class="text-right text-sm text-gray-500 mt-2">
+                        Word count: <span id="humanWordCount" class="font-bold">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- AI Writer -->
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="bg-purple-600 p-3">
+                    <h2 class="text-xl font-bold text-white">AI Writer</h2>
+                </div>
+                <div class="p-4 h-96 flex flex-col">
+                    <div id="aiTextContainer" class="w-full flex-grow p-3 border border-gray-200 rounded bg-gray-50 overflow-y-auto">
+                        <p id="aiTopicDisplay" class="text-gray-500 italic">Waiting for duel to begin...</p>
+                        <p id="aiContent" class="mt-2"></p>
+                    </div>
+                    <div class="text-right text-sm text-gray-500 mt-2">
+                        Word count: <span id="aiWordCount" class="font-bold">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Judge Panel -->
+        <div id="judgePanel" class="bg-white rounded-lg shadow-lg p-6 hidden">
+            <h2 class="text-2xl font-bold text-center mb-6">Judging Results</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div>
+                    <h3 class="font-semibold text-lg mb-3 text-blue-600">Your Essay</h3>
+                    <div id="humanFinalText" class="bg-gray-50 p-4 rounded border border-gray-200 mb-4 min-h-[120px]"></div>
+                    <div id="humanScoreCard" class="space-y-2"></div>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold text-lg mb-3 text-purple-600">AI Essay</h3>
+                    <div id="aiFinalText" class="bg-gray-50 p-4 rounded border border-gray-200 mb-4 min-h-[120px]"></div>
+                    <div id="aiScoreCard" class="space-y-2"></div>
+                </div>
+            </div>
+            
+            <div id="resultMessage" class="text-center py-4 px-6 rounded-lg bg-gradient-to-r from-blue-100 to-purple-100 mb-6 hidden">
+                <p class="text-2xl font-bold"></p>
+            </div>
+            
+            <div class="text-center">
+                <button id="rematchBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow transition-colors duration-200">
+                    REMATCH
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Constants ---
+        const TOTAL_TIME = 180;
+
+        // --- Game State ---
+        const gameState = {
+            timeLeft: TOTAL_TIME,
+            timer: null,
+            aiTimer: null,
+            isRunning: false,
+            humanScore: 0,
+            aiScore: 0,
+            currentTopic: ''
+        };
+
+        // --- DOM Elements ---
+        const startBtn = document.getElementById('startBtn');
+        const gradeBtn = document.getElementById('gradeBtn');
+        const rematchBtn = document.getElementById('rematchBtn');
+        const topicInput = document.getElementById('topicInput');
+        const humanText = document.getElementById('humanText');
+        const aiContent = document.getElementById('aiContent');
+        const humanTopicDisplay = document.getElementById('humanTopicDisplay');
+        const aiTopicDisplay = document.getElementById('aiTopicDisplay');
+        const humanWordCount = document.getElementById('humanWordCount');
+        const aiWordCount = document.getElementById('aiWordCount');
+        const judgePanel = document.getElementById('judgePanel');
+        const humanFinalText = document.getElementById('humanFinalText');
+        const aiFinalText = document.getElementById('aiFinalText');
+        const humanScoreCard = document.getElementById('humanScoreCard');
+        const aiScoreCard = document.getElementById('aiScoreCard');
+        const resultMessage = document.getElementById('resultMessage');
+        const progressCircle = document.querySelector('.progress-ring__circle');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const humanGlobalScoreEl = document.getElementById('humanGlobalScore');
+        const aiGlobalScoreEl = document.getElementById('aiGlobalScore');
+        
+        // --- Progress Circle Setup ---
+        const radius = progressCircle.r.baseVal.value;
+        const circumference = 2 * Math.PI * radius;
+        progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+        progressCircle.style.strokeDashoffset = circumference;
+
+        // --- Event Listeners ---
+        startBtn.addEventListener('click', startGame);
+        gradeBtn.addEventListener('click', gradeDuel);
+        rematchBtn.addEventListener('click', resetGame);
+        humanText.addEventListener('input', countHumanWords);
+        humanText.addEventListener('paste', (e) => {
+            e.preventDefault();
+            alert('Pasting text is not allowed in this duel! Your words must be original.');
+        });
+
+        // --- Game Flow Functions ---
+        function startGame() {
+            if (gameState.isRunning) return;
+            if (topicInput.value.trim() === '') {
+                alert('Please enter a topic for the duel!');
+                topicInput.focus();
+                return;
+            }
+            
+            resetRound();
+            gameState.isRunning = true;
+            gameState.currentTopic = topicInput.value.trim();
+            
+            // Update UI
+            startBtn.classList.add('hidden');
+            topicInput.disabled = true;
+            humanText.disabled = false;
+            humanText.focus();
+            
+            // Display topic
+            humanTopicDisplay.textContent = `Topic: ${gameState.currentTopic}`;
+            aiTopicDisplay.textContent = `Topic: ${gameState.currentTopic}`;
+            aiTopicDisplay.classList.remove('italic', 'text-gray-500');
+            aiTopicDisplay.classList.add('font-semibold', 'text-center');
+            
+            // Start timers
+            gameState.timer = setInterval(updateTimer, 1000);
+            setTimeout(startAIWriting, 1500);
+        }
+
+        function endGame() {
+            clearInterval(gameState.timer);
+            clearInterval(gameState.aiTimer);
+            gameState.isRunning = false;
+            humanText.disabled = true;
+
+            // Show Grade button
+            gradeBtn.classList.remove('hidden');
+            aiTopicDisplay.textContent = "AI has finished writing. Ready for grading.";
+        }
+        
+        function gradeDuel() {
+            gradeBtn.classList.add('hidden');
+            judgePanel.classList.remove('hidden');
+            judgePanel.scrollIntoView({ behavior: 'smooth' });
+            processResults();
+        }
+
+        function resetGame() {
+            gameState.humanScore = 0;
+            gameState.aiScore = 0;
+            humanGlobalScoreEl.textContent = '0';
+            aiGlobalScoreEl.textContent = '0';
+            topicInput.value = '';
+            resetRound();
+        }
+        
+        function resetRound() {
+            clearInterval(gameState.timer);
+            clearInterval(gameState.aiTimer);
+            gameState.timeLeft = TOTAL_TIME;
+            
+            // Reset UI elements
+            startBtn.classList.remove('hidden');
+            gradeBtn.classList.add('hidden');
+            topicInput.disabled = false;
+            
+            humanText.value = '';
+            humanText.disabled = true;
+            humanTopicDisplay.textContent = '';
+            aiTopicDisplay.textContent = 'Waiting for duel to begin...';
+            aiTopicDisplay.className = 'text-gray-500 italic';
+            aiContent.textContent = '';
+            
+            humanWordCount.textContent = '0';
+            aiWordCount.textContent = '0';
+            
+            timerDisplay.textContent = TOTAL_TIME;
+            progressCircle.style.strokeDashoffset = 0;
+            progressCircle.style.stroke = '#3b82f6'; // blue
+            
+            judgePanel.classList.add('hidden');
+            resultMessage.classList.add('hidden');
+            humanScoreCard.innerHTML = '';
+            aiScoreCard.innerHTML = '';
+        }
+
+        // --- Core Logic Functions ---
+        function updateTimer() {
+            gameState.timeLeft--;
+            timerDisplay.textContent = gameState.timeLeft;
+            
+            const offset = circumference - (gameState.timeLeft / TOTAL_TIME) * circumference;
+            progressCircle.style.strokeDashoffset = offset;
+            
+            if (gameState.timeLeft <= 30) progressCircle.style.stroke = '#ef4444'; // red-500
+            else if (gameState.timeLeft <= 60) progressCircle.style.stroke = '#f59e0b'; // amber-500
+            
+            if (gameState.timeLeft <= 0) endGame();
+        }
+
+        function startAIWriting() {
+            let aiText = '';
+            let wordsWritten = 0;
+            const sentences = [
+                `Considering ${gameState.currentTopic.toLowerCase()}, it's clear that the landscape is rapidly evolving. `, `A critical analysis reveals complex interdependencies. `, `The societal implications are both profound and far-reaching. `, `Historically, perspectives have shifted dramatically with new data. `, `One cannot discuss this without acknowledging the ethical dimensions. `, `Economic factors heavily influence development and adoption. `, `Future progress depends on in
 
