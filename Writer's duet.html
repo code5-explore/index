@@ -1,1 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writer's Duet Challenge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .heading-font {
+            font-family: 'Playfair Display', serif;
+        }
+        .progress-bar {
+            height: 4px;
+            background-color: #e9ecef;
+            border-radius: 2px;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #4f46e5;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+        .word-counter {
+            top: -10px;
+            right: 10px;
+            border-radius: 50%;
+            background-color: #4f46e5;
+            color: white;
+        }
+        textarea {
+            min-height: 200px;
+            resize: none !important;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <section class="container mx-auto px-4 py-8 max-w-4xl">
+        <header class="text-center mb-8">
+            <h1 class="heading-font text-4xl font-bold text-gray-800 mb-2">Writer's Duet</h1>
+            <p class="text-gray-600">A creative showdown between human and AI</p>
+            
+            <div class="mt-6 mb-8 w-full">
+                <img src="https://placehold.co/800x300" alt="Creative writing competition between human and AI with pens and digital devices" class="w-full h-auto rounded-lg shadow-md" />
+            </div>
+            
+            <div class="mt-6 w-full md:w-3/4 mx-auto">
+                <label for="topic" class="block text-left text-gray-700 font-medium mb-2">Writing Topic:</label>
+                <input type="text" id="topic" placeholder="Enter your writing challenge topic" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            
+            <button id="startTimer" class="mt-4 px-6 py-3 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors shadow-md">
+                Start 3-Minute Challenge
+            </button>
+        </header>
 
+        <div class="mb-4">
+            <div class="progress-bar">
+                <div id="timerProgress" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <span id="countdown" class="text-sm text-gray-500 mt-1 block text-right">3:00 remaining</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-lg shadow-md relative">
+                <div class="absolute -top-3 -right-3 w-8 h-8 flex items-center justify-center word-counter text-xs font-bold">
+                    <span id="humanWordCount">0</span>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Human's Composition</h2>
+                <textarea id="humanText" class="w-full border border-gray-300 rounded-md p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Write your 100-word composition here..."></textarea>
+                <p class="text-sm text-gray-500 mt-2">Words: <span id="humanWords">0</span>/100</p>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-md relative">
+                <div class="absolute -top-3 -right-3 w-8 h-8 flex items-center justify-center word-counter text-xs font-bold">
+                    <span id="aiWordCount">0</span>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">AI's Composition</h2>
+                <div id="aiText" class="min-h-[200px] border border-gray-300 rounded-md p-3 bg-gray-50">
+                    <p class="text-gray-500">AI's response will appear here after time expires</p>
+                </div>
+                <p class="text-sm text-gray-500 mt-2">Words: <span id="aiWords">0</span>/100</p>
+            </div>
+        </div>
+
+        <div class="flex flex-col md:flex-row justify-center gap-4 mt-6">
+            <button id="judgeEssays" disabled class="px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                Judge Essays
+            </button>
+            <button id="sendResults" disabled class="px-4 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                Send Results to +2347065132486
+            </button>
+        </div>
+
+        <div id="resultsContainer" class="mt-8 bg-white rounded-lg shadow-md p-6 hidden">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">Evaluation Results</h2>
+            <div id="resultsContent">
+                <!-- Results will be inserted here -->
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // DOM Elements
+        const startBtn = document.getElementById('startTimer');
+        const humanText = document.getElementById('humanText');
+        const aiText = document.getElementById('aiText');
+        const judgeBtn = document.getElementById('judgeEssays');
+        const sendBtn = document.getElementById('sendResults');
+        const countdownDisplay = document.getElementById('countdown');
+        const progressBar = document.getElementById('timerProgress');
+        const humanWordCount = document.getElementById('humanWordCount');
+        const humanWords = document.getElementById('humanWords');
+        const aiWords = document.getElementById('aiWords');
+        const aiWordCount = document.getElementById('aiWordCount');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const resultsContent = document.getElementById('resultsContent');
+        const topicInput = document.getElementById('topic');
+
+        // Variables
+        let timer;
+        let timeLeft = 180; // 3 minutes in seconds
+        let timerRunning = false;
+        let humanResponse = '';
+        let aiResponse = '';
+
+        // Event Listeners
+        startBtn.addEventListener('click', startTimer);
+        humanText.addEventListener('input', updateWordCount);
+        judgeBtn.addEventListener('click', judgeEssays);
+        sendBtn.addEventListener('click', sendResults);
+
+        // Functions
+        function startTimer() {
+            const topic = topicInput.value.trim();
+            if (!topic) {
+                alert('Please enter a topic for the writing challenge.');
+                return;
+            }
+
+            if (timerRunning) return;
+            
+            timerRunning = true;
+            startBtn.disabled = true;
+            humanText.disabled = false;
+            humanText.focus();
+            
+            timer = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    timerRunning = false;
+                    humanText.disabled = true;
+                    generateAIResponse();
+                    judgeBtn.disabled = false;
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            const progressPercent = ((180 - timeLeft) / 180) * 100;
+            
+            countdownDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')} remaining`;
+            progressBar.style.width = `${progressPercent}%`;
+        }
+
+        function updateWordCount() {
+            const text = humanText.value.trim();
+            const words = text ? text.split(/\s+/).
