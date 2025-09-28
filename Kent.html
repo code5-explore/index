@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Builder</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            transition: opacity 0.3s;
+        }
+        .login-container, .dashboard-container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            width: 300px;
+            text-align: center;
+        }
+        .dashboard-container {
+            width: 90%;
+            height: 90vh;
+            padding: 20px;
+            overflow: auto;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        .hidden {
+            display: none;
+        }
+        #dashboard {
+            border: 2px dashed #ccc;
+            min-height: 400px;
+            padding: 20px;
+            background-color: #fafafa;
+            position: relative;
+        }
+        .widget {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background: white;
+            border-radius: 5px;
+            cursor: move;
+        }
+        .toolbar {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+        }
+        .toolbar button {
+            width: auto;
+            margin: 0 5px;
+            padding: 5px 10px;
+        }
+        .remove-btn {
+            background: #dc3545;
+            float: right;
+            width: auto;
+            padding: 2px 6px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="login" class="login-container">
+        <h2>Login to Dashboard Builder</h2>
+        <input type="text" id="username" placeholder="Username" />
+        <input type="password" id="password" placeholder="Password" />
+        <button onclick="login()">Login</button>
+        <div id="error" class="error hidden"></div>
+    </div>
+
+    <div id="dashboard-container" class="dashboard-container hidden">
+        <h1>Dashboard Builder</h1>
+        <div class="toolbar">
+            <button onclick="addWidget('chart')">Add Chart</button>
+            <button onclick="addWidget('text')">Add Text</button>
+            <button onclick="addWidget('metric')">Add Metric</button>
+            <button onclick="exportDashboard()">Export Dashboard</button>
+        </div>
+        <div id="dashboard"></div>
+    </div>
+
+    <script>
+        const VALID_USERNAME = 'Tunde';
+        const VALID_PASSWORD = 'iamforreal';
+
+        function showError(msg) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = msg;
+            errorDiv.classList.remove('hidden');
+        }
+
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (username === VALID_USERNAME && password === VALID_PASSWORD) {
+                document.getElementById('login').classList.add('hidden');
+                document.getElementById('dashboard-container').classList.remove('hidden');
+                initSecurity();
+            } else {
+                showError('Invalid username or password.');
+            }
+        }
+
+        // Basic dashboard builder functionality
+        let widgetCounter = 0;
+
+        function addWidget(type) {
+            const dashboard = document.getElementById('dashboard');
+            const widget = document.createElement('div');
+            widget.className = 'widget';
+            widget.id = 'widget-' + (++widgetCounter);
+            widget.draggable = true;
+
+            let content = '';
+            switch (type) {
+                case 'chart':
+                    content = '<h3>Sample Chart</h3><p>Placeholder for chart data (e.g., integrate with Chart.js).</p>';
+                    break;
+                case 'text':
+                    content = '<h3>Text Widget</h3><p>Edit this text as needed.</p>';
+                    break;
+                case 'metric':
+                    content = '<h3>Key Metric</h3><p>Value: 42</p>';
+                    break;
+            }
+
+            widget.innerHTML = content + '<button class="remove-btn" onclick="removeWidget(\'' + widget.id + '\')">Remove</button>';
+            dashboard.appendChild(widget);
+
+            // Basic drag functionality (simplified)
+            widget.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', widget.id);
+            });
+        }
+
+        function removeWidget(id) {
+            const widget = document.getElementById(id);
+            if (widget) {
+                widget.remove();
+            }
+        }
+
+        function exportDashboard() {
+            const widgets = document.querySelectorAll('.widget');
+            let exportData = { widgets: [] };
+            widgets.forEach(widget => {
+                exportData.widgets.push({
+                    id: widget.id,
+                    innerHTML: widget.innerHTML.replace(/<button[^>]*>Remove<\/button>/, '') // Strip remove button for export
+                });
+            });
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'dashboard.json';
+            link.click();
+        }
+
+        // Security measures to restrict source viewing and dev tools (client-side only, not foolproof)
+        function initSecurity() {
+            // Disable right-click
+            document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            // Disable common dev tool shortcuts
+            document.addEventListener('keydown', (e) => {
+                // F12
+                if (e.keyCode === 123) {
+                    e.preventDefault();
+                    alert('Access to developer tools is restricted.');
+                    return false;
+                }
+                // CTRL+Shift+I
+                if (e.ctrlKey && e.shiftKey && e.keyCode === 73) {
+                    e.preventDefault();
+                    alert('Access to developer tools is restricted.');
+                    return false;
+                }
+                // CTRL+U (view source)
+                if (e.ctrlKey && e.keyCode === 85) {
+                    e.preventDefault();
+                    alert('Viewing source code is restricted.');
+                    return false;
+                }
+                // CTRL+Shift+C (inspect element)
+                if (e.ctrlKey && e.shiftKey && e.keyCode === 67) {
+                    e.preventDefault();
+                    alert('Access to developer tools is restricted.');
+                    return false;
+                }
+            }, false);
+
+            // Disable text selection
+            document.addEventListener('selectstart', (e) => e.preventDefault());
+
+            // Obfuscate or hide source (basic: make body non-selectable)
+            document.body.style.userSelect = 'none';
+            document.body.style.webkitUser Select = 'none';
+            document.body.style.mozUser Select = 'none';
+            document.body.style.msUser Select = 'none';
+
+            // Warn on suspicious activity (e.g., repeated key presses)
+            let suspiciousCount = 0;
+            document.addEventListener('keydown', () => {
+                suspiciousCount++;
+                if (suspiciousCount > 10) { // Arbitrary threshold
+                    alert('Suspicious activity detected. Please use the dashboard as intended.');
+                    location.reload(); // Reload to reset
+                }
+            });
+        }
+
+        // Allow Enter key for login
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !document.getElementById('dashboard-container').classList.contains('hidden')) {
+                login();
+            }
+        });
+    </script>
+</body>
+</html>
+
