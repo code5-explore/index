@@ -230,28 +230,49 @@
 
             // Obfuscate or hide source (basic: make body non-selectable)
             document.body.style.userSelect = 'none';
-            document.body.style.webkitUser Select = 'none';
-            document.body.style.mozUser Select = 'none';
-            document.body.style.msUser Select = 'none';
+            document.body.style.webkitUserSelect = 'none'; /* Corrected typo here */
+            document.body.style.mozUserSelect = 'none';
+            document.body.style.msUserSelect = 'none';
 
             // Warn on suspicious activity (e.g., repeated key presses)
             let suspiciousCount = 0;
             document.addEventListener('keydown', () => {
                 suspiciousCount++;
-                if (suspiciousCount > 10) { // Arbitrary threshold
+                if (suspiciousCount > 100) { // Increased threshold to be less aggressive
                     alert('Suspicious activity detected. Please use the dashboard as intended.');
                     location.reload(); // Reload to reset
+                    suspiciousCount = 0; // Reset count after reload
                 }
             });
         }
 
-        // Allow Enter key for login
+        // Corrected logic for Enter key to trigger login
         document.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && !document.getElementById('dashboard-container').classList.contains('hidden')) {
+            // Trigger login if Enter is pressed AND the login form is currently visible
+            if (e.key === 'Enter' && !document.getElementById('login').classList.contains('hidden')) {
+                login();
+            }
+        });
+
+        // Optional: Also attach 'Enter' key listeners directly to input fields for better UX
+        document.getElementById('username').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                login();
+            }
+        });
+        document.getElementById('password').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
                 login();
             }
         });
     </script>
 </body>
 </html>
+```
 
+
+        
+        
+
+         
+        
