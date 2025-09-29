@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyDashboardBuilder</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            background-color: #333;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+        }
+        .container {
+            flex-grow: 1;
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .sidebar {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 250px;
+            flex-shrink: 0;
+        }
+        .main-content {
+            flex-grow: 1;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-width: 300px;
+        }
+        input[type="file"] {
+            margin-bottom: 15px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #pivotTableContainer, #chartContainer {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            min-height: 200px;
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+        }
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: auto;
+            }
+        }
+    </style>
+</head>
+<body oncontextmenu="return false">
+    <header>
+        <h1>MyDashboardBuilder</h1>
+    </header>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Upload Data</h2>
+            <input type="file" id="fileInput" accept=".csv, .xls, .xlsx">
+            <button onclick="processFile()">Process File</button>
+
+            <h2>Pivot Analysis</h2>
+            <label for="rowField">Rows:</label>
+            <select id="rowField"></select>
+            <label for="colField">Columns:</label>
+            <select id="colField"></select>
+            <label for="valueField">Values:</label>
+            <select id="valueField"></select>
+            <button onclick="generatePivotTable()">Generate Pivot</button>
+
+            <h2>Visualizations</h2>
+            <label for="chartType">Chart Type:</label>
+            <select id="chartType" onchange="updateChartOptions()">
+                <option value="bar">Bar Chart</option>
+                <option value="line">Line Chart</option>
+                <option value="pie">Pie Chart</option>
+                <option value="histogram">Histogram</option>
+            </select>
+            <div id="chartOptions">
+                <label for="chartXAxis">X-Axis:</label>
+                <select id="chartXAxis"></select>
+                <label for="chartYAxis">Y-Axis:</label>
+                <select id="chartYAxis"></select>
+            </div>
+            <button onclick="generateChart()">Generate Chart</button>
+        </div>
+        <div class="main-content">
+            <h2>Data Preview</h2>
+            <div id="dataPreview"></div>
+
+            <h2>Pivot Table</h2>
+            <div id="pivotTableContainer"></div>
+
+            <h2>Data Visualization</h2>
+            <div id="chartContainer">
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey && e.key === 'u') || (e.ctrlKey && e.shiftKey && e.key === 'I')) {
+                e.preventDefault();
+                alert('Access to source code is disabled.');
+            }
+        });
+
+        let rawData = [];
+        let dataHeaders = [];
+        let myChartInstance;
+
+        async function processFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please upload a file.');
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = async function(e) {
+                const data = e.target.result;
+                const fileType = file.name.split('.').pop().toLowerCase();
+
+                if (fileType === 'csv') {
+                    PapaParse.parse(data, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            rawData = results.data;
+                            dataHeaders = Object.keys(rawData[0] || {});
+                            displayDataPreview();
+                            populateSelects();
+                        }
+                    });
+                } else if (fileType === 'xls' || fileType === 'xlsx') {
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    rawData = XLSX.utils.sheet_to_json(worksheet);
+                    dataHeaders = Object.keys(rawData[0] || {});
+                    displayDataPreview();
+                    populateSelects();
+                } else {
+                    alert('Unsupported file type. Please upload a CSV, XLS, or XLSX file.');
+                }
+            };
+            reader.readAsBinaryString(file);
+        }
+
+        function displayDataPreview() {
+            const previewContainer = document.getElementById('dataPreview');
+            if (!rawData.length) {
+                previewContainer.innerHTML = '<p>No data to display.</p>';
+                return;
+            }
+
+            let html = '<table><thead><tr>';
+            dataHeaders.forEach(header => {
+                html += `<th>${header}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            for (let i = 0; i < Math.min(rawData.length, 10); i++) { // Show first 10 rows
+                html += '<tr>';
+                dataHeaders.forEach(header => {
+                    html += `<td>${rawData[i][header] || ''}</td>`;
+                });
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+            previewContainer.innerHTML = html;
+        }
+
+        function populateSelects() {
+            const selects = ['rowField', 'colField', 'valueField', 'chartXAxis', 'chartYAxis'];
+            selects.forEach(selectId => {
+                const selectElement = document.getElementById(selectId);
+                selectElement.innerHTML = '<option value="">--Select--</option>';
+                dataHeaders.forEach(header => {
+                    const option = document.createElement('option');
+                    option.value = header;
+                    option.textContent = header;
+                    selectElement.appendChild(option);
+                });
+            });
+            updateChartOptions();
+        }
+
+        function generatePivotTable() {
+            const rowField = document.getElementById('rowField').value;
+            const colField = document.getElementById('colField').value;
+            const valueField = document.getElementById('valueField').value;
+            const pivotContainer = document.getElementById('pivotTableContainer');
+
+            if (!rowField || !valueField) {
+                pivotContainer.innerHTML = '<p>Please select at least Row and Value fields for pivot analysis.</p>';
+                return;
+            }
+
+            const pivotData = {};
+            const rowValues = new Set();
+            const colValues = new Set();
+
+            rawData.forEach(row => {
+                const rVal = row[rowField];
+                const cVal = colField ? row[colField] : '_TOTAL_';
+                const val = parseFloat(row[valueField]);
+
+                if (isNaN(val)) return;
+
+                rowValues.add(rVal);
+                colValues.add(cVal);
+
+                if (!pivotData[rVal]) {
+                    pivotData[rVal] = {};
+                }
+                if (!pivotData[rVal][cVal]) {
+                    pivotData[rVal][cVal] = 0;
+                }
+                pivotData[rVal][cVal] += val;
+            });
+
+            const sortedRowValues = Array.from(rowValues).sort();
+            const sortedColValues = Array.from(colValues).sort();
+
+            let html = '<table><thead><tr>';
+            html += `<th>${rowField}</th>`;
+            sortedColValues.forEach(col => {
+                html += `<th>${colField ? col : 'Total'}</th>`;
+            });
+            html += '<th>Grand Total</th>';
+            html += '</tr></thead><tbody>';
+
+            let grandColumnTotals = {};
+            sortedColValues.forEach(col => grandColumnTotals[col] = 0);
+            grandColumnTotals['_TOTAL_'] = 0;
+
+            sortedRowValues.forEach(rVal => {
+                html += '<tr>';
+                html += `<td>${rVal}</td>`;
+                let rowTotal = 0;
+                sortedColValues.forEach(cVal => {
+                    const value = pivotData[rVal]?.[cVal] || 0;
+                    html += `<td>${value.toFixed(2)}</td>`;
+                    rowTotal += value;
+                    grandColumnTotals[cVal] += value;
+                });
+                html += `<td>${rowTotal.toFixed(2)}</td>`;
+                grandColumnTotals['_TOTAL_'] += rowTotal;
+                html += '</tr>';
+            });
+
+            html += '<tr><th>Grand Total</th>';
+            sortedColValues.forEach(col => {
+                html += `<th>${grandColumnTotals[col].toFixed(2)}</th>`;
+            });
+            html += `<th>${grandColumnTotals['_TOTAL_'].toFixed(2)}</th>`;
+            html += '</tr></tbody></table>';
+            pivotContainer.innerHTML = html;
+        }
+
+        function updateChartOptions() {
+            const chartType = document.getElementById('chartType').value;
+            const chartOptionsDiv = document.getElementById('chartOptions');
+            const chartXAxisSelect = document.getElementById('chartXAxis');
+            const chartYAxisSelect = document.getElementById('chartYAxis');
+
+            if (chartType === 'pie') {
+                chartXAxisSelect.parentNode.style.display = 'none';
+                chartYAxisSelect.labels[0].textContent = 'Values:';
+            } else if (chartType === 'histogram') {
+                chartXAxisSelect.parentNode.style.display = 'block';
+                chartXAxisSelect.labels[0].textContent = 'Bins Field:';
+                chartYAxisSelect.parentNode.style.display = 'none';
+            }
+            else {
+                chartXAxisSelect.parentNode.style.display = 'block';
+                chartXAxisSelect.labels[0].textContent = 'X-Axis:';
+                chartYAxisSelect.parentNode.style.display = 'block';
+                chartYAxisSelect.labels[0].textContent = 'Y-Axis:';
+            }
+        }
+
+        function generateChart() {
+            const chartType = document.getElementById('chartType').value;
+            const chartXAxisField = document.getElementById('chartXAxis').value;
+            const chartYAxisField = document.getElementById('chartYAxis').value;
+            const ctx = document.getElementById('myChart').getContext('2d');
+
+            if (myChartInstance) {
+                myChartInstance.destroy();
+            }
+
+            if (!rawData.length) {
+                alert('Please upload data first.');
+                return;
+            }
+
+            let labels = [];
+            let values = [];
+            let chartConfig = {};
+
+            if (chartType === 'pie') {
+                if (!chartYAxisField) {
+                    alert('Please select a value field for the Pie Chart.');
+                    return;
+                }
+                const counts = {};
+                rawData.forEach(row => {
+                    const val = row[chartYAxisField];
+                    counts[val] = (counts[val] || 0) + 1;
+                });
+                labels = Object.keys(counts);
+                values = Object.values(counts);
+
+                chartConfig = {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: labels.map(() => `hsl(${Math.random() * 360}, 70%, 50%)`),
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: `Pie Chart of ${chartYAxisField}`
+                            }
+                        }
+                    }
+                };
+            } else if (chartType === 'histogram') {
+                if (!chartXAxisField) {
+                    alert('Please select a field for the Histogram bins.');
+                    return;
+                }
+
+                const numericData = rawData.map(row => parseFloat(row[chartXAxisField])).filter(val => !isNaN(val));
+                if (numericData.length === 0) {
+                    alert('No numeric data found for the selected field to create a histogram.');
+                    return;
+                }
+
+                const minVal = Math.min(...numericData);
+                const maxVal = Math.max(...numericData);
+                const numBins = 10; // You can make this configurable
+                const binWidth = (maxVal - minVal) / numBins;
+
+                const bins = Array(numBins).fill(0);
+                const binLabels = [];
+
+                for (let i = 0; i < numBins; i++) {
+                    const lowerBound = minVal + i * binWidth;
+                    const upperBound = minVal + (i + 1) * binWidth;
+                    binLabels.push(`${lowerBound.toFixed(2)}-${upperBound.toFixed(2)}`);
+                    numericData.forEach(val => {
+                        if (val >= lowerBound && (i === numBins - 1 ? val <= upperBound : val < upperBound)) {
+                            bins[i]++;
+                        }
+                    });
+                }
+                labels = binLabels;
+                values = bins;
+
+                chartConfig = {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: `Frequency of ${chartXAxisField}`,
+                            data: values,
+                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Histogram of ${chartXAxisField}`
+                            },
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: chartXAxisField
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Frequency'
+                                },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                };
+
+            } else { // Bar and Line charts
+                if (!chartXAxisField || !chartYAxisField) {
+                    alert('Please select X-Axis and Y-Axis fields for the chart.');
+                    return;
+                }
+
+                const groupedData = {};
+                rawData.forEach(row => {
+                    const xVal = row[chartXAxisField];
+                    const yVal = parseFloat(row[chartYAxisField]);
+                    if (!isNaN(yVal)) {
+                        if (!groupedData[xVal]) {
+                            groupedData[xVal] = [];
+                        }
+                        groupedData[xVal].push(yVal);
+                    }
+                });
+
+                labels = Object.keys(groupedData).sort();
+                values = labels.map(label => {
+                    // You might want to sum, average, etc. For simplicity, we'll sum.
+                    return groupedData[label].reduce((sum, val) => sum + val, 0);
+                });
+
+                chartConfig = {
+                    type: chartType,
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: `${chartYAxisField} by ${chartXAxisField}`,
+                            data: values,
+                            backgroundColor: chartType === 'bar' ? 'rgba(75, 192, 192, 0.6)' : 'rgba(75, 192, 192, 0.2)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1,
+                            fill: chartType === 'line' ? true : false,
+                            tension: chartType === 'line' ? 0.4 : 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: `${chartType === 'bar' ? 'Bar Chart' : 'Line Chart'} of ${chartYAxisField} by ${chartXAxisField}`
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: chartXAxisField
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: chartYAxisField
+                                },
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                };
+            }
+
+            myChartInstance = new Chart(ctx, chartConfig);
+        }
+    </script>
+</body>
+</html>
