@@ -3,37 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyDashboardBuilder</title>
+    <title>Dashboard Builder</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.full.min.js"></script>
     <style>
-        body {
-            font-family: sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f4f4f4;
-            color: #333;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            -khtml-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
+        body { font-family: sans-serif; display: flex; }
+        #sidebar { width: 250px; padding: 15px; border-right: 1px solid #ccc; }
+        #main-content { flex-grow: 1; padding: 15px; }
+        .chart-container { position: relative; width: 400px; height: 300px; margin: 20px; border: 1px solid #eee; display: inline-block; }
+        .chart-container button { position: absolute; top: 5px; right: 5px; }
+        #chart-options label { display: block; margin-bottom: 5px; }
+        #chart-options select, #chart-options input[type="text"] { width: 100%; padding: 5px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h2>Upload Data</h2>
+        <input type="file" id="file-input" accept=".csv, .xls, .xlsx">
+        <h3>Chart Builder</h3>
+        <div id="chart-options">
+            <label for="chart-type">Chart Type:</label>
+            <select id="chart-type">
+                <option value="bar">Bar</option>
+                <option value="line">Line</option>
+                <option value="pie">Pie</option>
+            </select>
+            <label for="x-axis-col">X-Axis Column:</label>
+            <select id="x-axis-col"></select>
+            <label for="y-axis-col">Y-Axis Column:</label>
+            <select id="y-axis-col"></select>
+            <button id="add-chart-btn">Add Chart</button>
+        </div>
+    </div>
+    <div id="main-content">
+        <h1>Dashboard</h1>
+        <div id="dashboard-container"></div>
+    </div>
+
+    <script>
+        let jsonData = [];
+        let columnHeaders = [];
+        let chartCounter = 0;
+
+        document.getElementById('file-input').addEventListener('change', handleFileUpload);
+        document.getElementById('add-chart-btn').addEventListener('click', addChart);
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    if (jsonData.length > 0) {
+                        columnHeaders = Object.keys(jsonData[0]);
+                        populateColumnSelects();
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
         }
-        .container {
-            max-width: 1200px;
-            margin: 20px auto;
-            background-color: #fff;
-            padding: 20px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
+
+        function populateColumnSelects() {
+            const xAxisSelect = document.getElementById('x-axis-col');
+            const yAxisSelect = document.getElementById('y-axis-col');
+            xAxisSelect.innerHTML = '';
+            yAxisSelect.innerHTML = '';
+
+            columnHeaders.forEach(header => {
+                const optionX = document.createElement('option');
+                optionX.value = header;
+                optionX.textContent = header;
+                xAxisSelect.appendChild(optionX);
+
+                const optionY = document.createElement('option');
+                optionY.value = header;
+                optionY.textContent = header;
+                yAxisSelect.appendChild(optionY);
+            });
         }
-        h1 {
-            text-align: center;
-            color: #0056b3;
-            margin-bottom: 20px;
+
+        function addChart() {
+            if (jsonData.length === 0) {
+                alert('Please upload a file first.');
+                return;
+            }
+
+            const chartType = document.getElementById('chart-type').value;
+            const xAxisCol = document.getElementById('x-axis-col').value;
+            const yAxisCol = document.getElementById('y-axis-col').value;
+
+            if (!xAxisCol || !yAxisCol) {
+                alert('Please select X and Y axis columns.');
+                return;
+            }
+
+            const labels = jsonData.map(row => row[xAxisCol]);
+            const data = jsonData.map(row => row[yAxisCol]);
+
+            chartCounter++;
+            const chartId = `chart-${chartCounter}`;
+
+            const chartContainer = document.createElement('div');
+            chartContainer.className = 'chart-container';
+            chartContainer.id = `container-${chartId}`;
+            
+            const removeButton = document.createElement('button');
+            removeButton.textContent = 'X';
+            removeButton.onclick = () => chartContainer.remove();
+            chartContainer.appendChild(removeButton);
+
+            const canvas = document.createElement('canvas');
+            canvas.id = chartId;
+            chartContainer.appendChild(canvas);
+            document.getElementById('dashboard-container').appendChild(chartContainer);
+
+            new Chart(canvas, {
+                type: chartType,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: yAxisCol,
+                        data: data,
+                        backgroundColor: chartType === 'pie' ? generateRandomColors(data.length) : 'rgba(75, 192, 192, 0.6)',
+                        borderColor: chartType === 'pie' ? generateRandomColors(data.length) : 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
         }
-        .upload-section {
-            margin-bottom: 30px;
-            text-align: center;
+
+        function generateRandomColors(numColors) {
+            const colors = [];
+            for (let i = 0; i < numColors; i++) {
+                const r = Math.floor(Math.random() * 255);
+                const g = Math.floor(Math.random() * 255);
+                const b = Math.floor(Math.random() * 255);
+                colors.push(`rgba(${r}, ${g}, ${b}, 0.6)`);
+            }
+            return colors;
+        }
+    </script>
+</body>
+</html>
+```
+
+Looks like you're building a neat dashboard builder! Here's a preview of what the interface might look like:
             border-bottom: 1px solid #eee;
             padding-bottom: 20px;
         }
