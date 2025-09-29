@@ -5,36 +5,519 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyDashboardBuilder</title>
     <style>
-        body { font-family: sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; color: #333; }
-        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #fff; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); border-radius: 8px; }
-        h1 { text-align: center; color: #0056b3; }
-        .upload-section { margin-bottom: 20px; padding: 15px; border: 1px dashed #ccc; border-radius: 5px; text-align: center; }
-        .upload-section input[type="file"] { margin-top: 10px; }
-        .data-table-container, .pivot-table-container, .chart-container { margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        table th, table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        table th { background-color: #f2f2f2; }
-        .chart-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
-        .chart-controls label { margin-right: 5px; }
-        .chart-controls select, .chart-controls button { padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; }
-        .chart-controls button { background-color: #007bff; color: white; cursor: pointer; }
-        .chart-controls button:hover { background-color: #0056b3; }
-        .chart-display { margin-top: 20px; }
-        canvas { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-        .export-section { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
-        .export-section button { padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
-        .export-section button:hover { background-color: #218838; }
-        .hidden { display: none; }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            color: #333;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-user-drag: none;
+            -khtml-user-drag: none;
+            -moz-user-drag: none;
+            -ms-user-drag: none;
+            user-drag: none;
+        }
+
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 1em 0;
+            text-align: center;
+        }
+
+        .container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        .upload-section, .analysis-section, .visualization-section, .export-section {
+            background-color: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        input[type="file"] {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        select, input[type="text"], input[type="number"] {
+            padding: 8px;
+            margin-right: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        #data-preview {
+            max-height: 300px;
+            overflow: auto;
+            border: 1px solid #ddd;
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+
+        #data-preview table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #data-preview th, #data-preview td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #pivot-table {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            max-height: 400px;
+            overflow: auto;
+        }
+
+        #pivot-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #pivot-table th, #pivot-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+            margin-top: 20px;
+        }
 
         @media (max-width: 768px) {
-            .container { margin: 10px; padding: 15px; }
-            .chart-controls { flex-direction: column; }
-            .chart-controls select, .chart-controls button { width: 100%; }
+            .container {
+                padding: 10px;
+            }
+            button, select, input[type="text"], input[type="number"] {
+                width: 100%;
+                margin-bottom: 10px;
+            }
         }
     </style>
+</head>
+<body>
+    <header>
+        <h1>MyDashboardBuilder</h1>
+    </header>
+
+    <div class="container">
+        <div class="upload-section">
+            <h2>Upload Data</h2>
+            <input type="file" id="file-input" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
+            <button onclick="processFile()">Upload & Process</button>
+            <div id="data-preview"></div>
+        </div>
+
+        <div class="analysis-section">
+            <h2>Pivot Analysis</h2>
+            <div id="pivot-controls">
+                Rows: <select id="pivot-rows"></select>
+                Columns: <select id="pivot-columns"></select>
+                Values: <select id="pivot-values"></select>
+                Aggregate:
+                <select id="pivot-aggregate">
+                    <option value="sum">Sum</option>
+                    <option value="count">Count</option>
+                    <option value="avg">Average</option>
+                    <option value="min">Min</option>
+                    <option value="max">Max</option>
+                </select>
+                <button onclick="performPivot()">Perform Pivot</button>
+            </div>
+            <div id="pivot-table"></div>
+        </div>
+
+        <div class="visualization-section">
+            <h2>Data Visualization</h2>
+            <div id="chart-controls">
+                Chart Type:
+                <select id="chart-type">
+                    <option value="bar">Bar Chart</option>
+                    <option value="line">Line Chart</option>
+                    <option value="pie">Pie Chart</option>
+                    <option value="histogram">Histogram</option>
+                </select>
+                X-Axis: <select id="chart-x"></select>
+                Y-Axis: <select id="chart-y"></select>
+                Bins (for Histogram): <input type="number" id="histogram-bins" value="10" min="1">
+                <button onclick="generateChart()">Generate Chart</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
+
+        <div class="export-section">
+            <h2>Export Results</h2>
+            <button onclick="exportData()">Export Current Data</button>
+            <button onclick="exportPivotTable()">Export Pivot Table</button>
+            <button onclick="exportChart()">Export Chart as Image</button>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sheetjs-style/dist/xlsx.full.min.js"></script>
+    <script>
+        document.addEventListener('contextmenu', event => event.preventDefault());
+        document.addEventListener('keydown', e => {
+            if (e.ctrlKey && (e.key === 'u' || e.key === 's' || e.key === 'p')) {
+                e.preventDefault();
+            }
+        });
+
+        let rawData = [];
+        let headerRow = [];
+        let myChartInstance;
+
+        function processFile() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file first.');
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const data = e.target.result;
+                if (file.name.endsWith('.csv')) {
+                    PapaParse.parse(data, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            rawData = results.data;
+                            if (rawData.length > 0) {
+                                headerRow = Object.keys(rawData[0]);
+                                displayDataPreview();
+                                populateSelects();
+                            } else {
+                                alert('CSV file is empty or malformed.');
+                            }
+                        }
+                    });
+                } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    rawData = XLSX.utils.sheet_to_json(worksheet);
+                    if (rawData.length > 0) {
+                        headerRow = Object.keys(rawData[0]);
+                        displayDataPreview();
+                        populateSelects();
+                    } else {
+                        alert('Excel file is empty or malformed.');
+                    }
+                } else {
+                    alert('Unsupported file type. Please upload a CSV or Excel file.');
+                }
+            };
+
+            if (file.name.endsWith('.csv')) {
+                reader.readAsText(file);
+            } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                reader.readAsBinaryString(file);
+            }
+        }
+
+        function displayDataPreview() {
+            const previewDiv = document.getElementById('data-preview');
+            previewDiv.innerHTML = '';
+
+            if (rawData.length === 0) {
+                previewDiv.innerHTML = '<p>No data to display.</p>';
+                return;
+            }
+
+            let tableHTML = '<table><thead><tr>';
+            headerRow.forEach(header => {
+                tableHTML += `<th>${header}</th>`;
+            });
+            tableHTML += '</tr></thead><tbody>';
+
+            for (let i = 0; i < Math.min(rawData.length, 10); i++) {
+                tableHTML += '<tr>';
+                headerRow.forEach(header => {
+                    tableHTML += `<td>${rawData[i][header] || ''}</td>`;
+                });
+                tableHTML += '</tr>';
+            }
+            tableHTML += '</tbody></table>';
+            previewDiv.innerHTML = tableHTML;
+        }
+
+        function populateSelects() {
+            const pivotRowsSelect = document.getElementById('pivot-rows');
+            const pivotColumnsSelect = document.getElementById('pivot-columns');
+            const pivotValuesSelect = document.getElementById('pivot-values');
+            const chartXSelect = document.getElementById('chart-x');
+            const chartYSelect = document.getElementById('chart-y');
+
+            [pivotRowsSelect, pivotColumnsSelect, pivotValuesSelect, chartXSelect, chartYSelect].forEach(select => {
+                select.innerHTML = '<option value="">-- Select --</option>';
+            });
+
+            headerRow.forEach(header => {
+                const option = `<option value="${header}">${header}</option>`;
+                pivotRowsSelect.innerHTML += option;
+                pivotColumnsSelect.innerHTML += option;
+                pivotValuesSelect.innerHTML += option;
+                chartXSelect.innerHTML += option;
+                chartYSelect.innerHTML += option;
+            });
+        }
+
+        function performPivot() {
+            const rowsField = document.getElementById('pivot-rows').value;
+            const columnsField = document.getElementById('pivot-columns').value;
+            const valuesField = document.getElementById('pivot-values').value;
+            const aggregateType = document.getElementById('pivot-aggregate').value;
+            const pivotTableDiv = document.getElementById('pivot-table');
+            pivotTableDiv.innerHTML = '';
+
+            if (!rowsField || !valuesField) {
+                pivotTableDiv.innerHTML = '<p>Please select at least a Rows and Values field for pivot analysis.</p>';
+                return;
+            }
+
+            const pivotData = {};
+            const rowHeaders = new Set();
+            const colHeaders = new Set();
+
+            rawData.forEach(row => {
+                const rowKey = row[rowsField];
+                const colKey = columnsField ? row[columnsField] : '_TOTAL_';
+                const value = parseFloat(row[valuesField]);
+
+                if (isNaN(value)) return;
+
+                rowHeaders.add(rowKey);
+                if (columnsField) colHeaders.add(colKey);
+
+                if (!pivotData[rowKey]) {
+                    pivotData[rowKey] = {};
+                }
+                if (!pivotData[rowKey][colKey]) {
+                    pivotData[rowKey][colKey] = [];
+                }
+                pivotData[rowKey][colKey].push(value);
+            });
+
+            const sortedRowHeaders = Array.from(rowHeaders).sort();
+            const sortedColHeaders = columnsField ? Array.from(colHeaders).sort() : ['_TOTAL_'];
+
+            let tableHTML = '<table><thead><tr>';
+            tableHTML += `<th>${rowsField}</th>`;
+            sortedColHeaders.forEach(colHeader => {
+                tableHTML += `<th>${colHeader === '_TOTAL_' ? valuesField : colHeader}</th>`;
+            });
+            tableHTML += `<th>Row Total (${aggregateType})</th>`;
+            tableHTML += '</tr></thead><tbody>';
+
+            const columnTotals = {};
+
+            sortedRowHeaders.forEach(rowHeader => {
+                tableHTML += '<tr>';
+                tableHTML += `<td>${rowHeader}</td>`;
+                let rowTotal = 0;
+                let rowCount = 0;
+                let rowMin = Infinity;
+                let rowMax = -Infinity;
+                let rowSum = 0;
+
+                sortedColHeaders.forEach(colHeader => {
+                    const values = pivotData[rowHeader] && pivotData[rowHeader][colHeader] ? pivotData[rowHeader][colHeader] : [];
+                    let aggregatedValue = 0;
+
+                    if (!columnTotals[colHeader]) {
+                        columnTotals[colHeader] = { sum: 0, count: 0, min: Infinity, max: -Infinity, values: [] };
+                    }
+
+                    if (values.length > 0) {
+                        const sum = values.reduce((a, b) => a + b, 0);
+                        const count = values.length;
+                        const min = Math.min(...values);
+                        const max = Math.max(...values);
+
+                        rowSum += sum;
+                        rowCount += count;
+                        rowMin = Math.min(rowMin, min);
+                        rowMax = Math.max(rowMax, max);
+
+                        columnTotals[colHeader].sum += sum;
+                        columnTotals[colHeader].count += count;
+                        columnTotals[colHeader].min = Math.min(columnTotals[colHeader].min, min);
+                        columnTotals[colHeader].max = Math.max(columnTotals[colHeader].max, max);
+                        columnTotals[colHeader].values.push(...values);
+
+                        switch (aggregateType) {
+                            case 'sum': aggregatedValue = sum; break;
+                            case 'count': aggregatedValue = count; break;
+                            case 'avg': aggregatedValue = (sum / count).toFixed(2); break;
+                            case 'min': aggregatedValue = min; break;
+                            case 'max': aggregatedValue = max; break;
+                        }
+                    }
+                    tableHTML += `<td>${aggregatedValue}</td>`;
+                });
+
+                let finalRowTotal = 0;
+                switch (aggregateType) {
+                    case 'sum': finalRowTotal = rowSum; break;
+                    case 'count': finalRowTotal = rowCount; break;
+                    case 'avg': finalRowTotal = rowCount > 0 ? (rowSum / rowCount).toFixed(2) : 0; break;
+                    case 'min': finalRowTotal = rowMin === Infinity ? 0 : rowMin; break;
+                    case 'max': finalRowTotal = rowMax === -Infinity ? 0 : rowMax; break;
+                }
+                tableHTML += `<td>${finalRowTotal}</td>`;
+                tableHTML += '</tr>';
+            });
+
+            tableHTML += '<tfoot><tr><th>Column Total (' + aggregateType + ')</th>';
+            sortedColHeaders.forEach(colHeader => {
+                let aggregatedColValue = 0;
+                const colAggData = columnTotals[colHeader];
+                if (colAggData && colAggData.count > 0) {
+                    switch (aggregateType) {
+                        case 'sum': aggregatedColValue = colAggData.sum; break;
+                        case 'count': aggregatedColValue = colAggData.count; break;
+                        case 'avg': aggregatedColValue = (colAggData.sum / colAggData.count).toFixed(2); break;
+                        case 'min': aggregatedColValue = colAggData.min; break;
+                        case 'max': aggregatedColValue = colAggData.max; break;
+                    }
+                }
+                tableHTML += `<td>${aggregatedColValue}</td>`;
+            });
+
+            let grandTotal = 0;
+            let grandCount = 0;
+            let grandMin = Infinity;
+            let grandMax = -Infinity;
+            let grandSum = 0;
+            Object.values(columnTotals).forEach(colAggData => {
+                if(colAggData){
+                     grandSum += colAggData.sum;
+                     grandCount += colAggData.count;
+                     grandMin = Math.min(grandMin, colAggData.min);
+                     grandMax = Math.max(grandMax, colAggData.max);
+                }
+            });
+
+            switch (aggregateType) {
+                case 'sum': grandTotal = grandSum; break;
+                case 'count': grandTotal = grandCount; break;
+                case 'avg': grandTotal = grandCount > 0 ? (grandSum / grandCount).toFixed(2) : 0; break;
+                case 'min': grandTotal = grandMin === Infinity ? 0 : grandMin; break;
+                case 'max': grandTotal = grandMax === -Infinity ? 0 : grandMax; break;
+            }
+            tableHTML += `<td>${grandTotal}</td>`;
+            tableHTML += '</tr></tfoot>';
+            tableHTML += '</tbody></table>';
+            pivotTableDiv.innerHTML = tableHTML;
+        }
+
+        function generateChart() {
+            const chartType = document.getElementById('chart-type').value;
+            const chartX = document.getElementById('chart-x').value;
+            const chartY = document.getElementById('chart-y').value;
+            const histogramBins = parseInt(document.getElementById('histogram-bins').value);
+
+            const canvas = document.getElementById('myChart');
+
+            if (myChartInstance) {
+                myChartInstance.destroy();
+            }
+
+            if (!chartX && chartType !== 'pie') {
+                alert('Please select an X-Axis field.');
+                return;
+            }
+            if (!chartY && chartType !== 'pie' && chartType !== 'histogram') {
+                alert('Please select a Y-Axis field.');
+                return;
+            }
+            if ((!chartX && !chartY) && chartType === 'pie') {
+                 alert('Please select at least one field for Pie chart.');
+                 return;
+            }
+
+            let labels = [];
+            let dataValues = [];
+            let chartConfig = {};
+
+            if (chartType === 'pie') {
+                const pieField = chartX || chartY;
+                if (!pieField) {
+                    alert('Please select a field for the Pie chart.');
+                    return;
+                }
+                const counts = {};
+                rawData.forEach(row => {
+                    const key = row[pieField];
+                    counts[key] = (counts[key] || 0) + 1;
+                });
+                labels = Object.keys(counts);
+                dataValues = Object.values(counts);
+
+                chartConfig = {
+                    type: chartType,
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: dataValues,
+                            backgroundColor: labels.map(() => `hsl(${Math.random() * 360}, 70%, 50%)`)
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `Pie Chart of ${pieField}`
+                            }
+                        }
+                    }
+                };
+            } else if (chartType === 'histogram') {
+                if (!chartX) {
+                    alert('Please select an X-Axis field for the Histogram.');
+        <script src="https://cdn.jsdelivr.net/npm/sheetjs-style/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
