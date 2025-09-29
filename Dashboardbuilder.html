@@ -5,36 +5,449 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MyDashboardBuilder</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f4f4f4;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
+        body { font-family: sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #fff; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); border-radius: 8px; }
+        h1 { text-align: center; color: #0056b3; }
+        .upload-section { margin-bottom: 20px; padding: 15px; border: 1px dashed #ccc; border-radius: 5px; text-align: center; }
+        .upload-section input[type="file"] { margin-top: 10px; }
+        .data-table-container, .pivot-table-container, .chart-container { margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        table th, table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        table th { background-color: #f2f2f2; }
+        .chart-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+        .chart-controls label { margin-right: 5px; }
+        .chart-controls select, .chart-controls button { padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; }
+        .chart-controls button { background-color: #007bff; color: white; cursor: pointer; }
+        .chart-controls button:hover { background-color: #0056b3; }
+        .chart-display { margin-top: 20px; }
+        canvas { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+        .export-section { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; }
+        .export-section button { padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        .export-section button:hover { background-color: #218838; }
+        .hidden { display: none; }
+
+        @media (max-width: 768px) {
+            .container { margin: 10px; padding: 15px; }
+            .chart-controls { flex-direction: column; }
+            .chart-controls select, .chart-controls button { width: 100%; }
         }
-        header {
-            background-color: #333;
-            color: white;
-            padding: 1rem;
-            text-align: center;
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sheetjs-style/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>MyDashboardBuilder</h1>
+
+        <div class="upload-section">
+            <p>Upload your Excel (.xlsx) or CSV (.csv) file</p>
+            <input type="file" id="fileInput" accept=".csv, .xlsx">
+        </div>
+
+        <div id="dataView" class="hidden">
+            <h2>Data Preview</h2>
+            <div class="data-table-container">
+                <table id="dataTable"></table>
+            </div>
+
+            <h2>Pivot Analysis</h2>
+            <div class="pivot-controls">
+                <label for="pivotRows">Rows:</label>
+                <select id="pivotRows"></select>
+                <label for="pivotCols">Columns:</label>
+                <select id="pivotCols"></select>
+                <label for="pivotValues">Values:</label>
+                <select id="pivotValues"></select>
+                <label for="pivotAgg">Aggregation:</label>
+                <select id="pivotAgg">
+                    <option value="sum">Sum</option>
+                    <option value="count">Count</option>
+                    <option value="avg">Average</option>
+                    <option value="min">Min</option>
+                    <option value="max">Max</option>
+                </select>
+                <button onclick="generatePivotTable()">Generate Pivot</button>
+            </div>
+            <div class="pivot-table-container">
+                <table id="pivotTable"></table>
+            </div>
+
+            <h2>Data Visualizations</h2>
+            <div class="chart-controls">
+                <label for="chartType">Chart Type:</label>
+                <select id="chartType">
+                    <option value="bar">Bar Chart</option>
+                    <option value="line">Line Chart</option>
+                    <option value="pie">Pie Chart</option>
+                    <option value="doughnut">Doughnut Chart</option>
+                    <option value="histogram">Histogram (Bar)</option>
+                </select>
+                <label for="chartXAxis">X-Axis:</label>
+                <select id="chartXAxis"></select>
+                <label for="chartYAxis">Y-Axis (for bar/line/histogram):</label>
+                <select id="chartYAxis"></select>
+                <label for="chartSliceBy">Slice By (for pie/doughnut):</label>
+                <select id="chartSliceBy"></select>
+                <button onclick="generateChart()">Generate Chart</button>
+            </div>
+            <div class="chart-display">
+                <canvas id="myChart"></canvas>
+            </div>
+
+            <div class="export-section">
+                <button onclick="exportToExcel()">Export Results to Excel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('contextmenu', event => event.preventDefault());
+        document.onkeydown = function(e) {
+            if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) || (e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)) || (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0))) {
+                return false;
+            }
+        };
+
+        let rawData = [];
+        let headers = [];
+        let myChartInstance;
+
+        document.getElementById('fileInput').addEventListener('change', handleFile, false);
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const data = event.target.result;
+                const fileName = file.name;
+
+                if (fileName.endsWith('.csv')) {
+                    parseCSV(data);
+                } else if (fileName.endsWith('.xlsx')) {
+                    parseExcel(data);
+                }
+            };
+
+            if (file.name.endsWith('.csv')) {
+                reader.readAsText(file);
+            } else if (file.name.endsWith('.xlsx')) {
+                reader.readAsArrayBuffer(file);
+            }
         }
-        .container {
-            flex-grow: 1;
-            padding: 20px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
+
+        function parseCSV(data) {
+            PapaParse.parse(data, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    rawData = results.data;
+                    headers = results.meta.fields;
+                    displayData();
+                }
+            });
         }
-        .sidebar {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            width: 250px;
-            flex-shrink: 0;
+
+        function parseExcel(data) {
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            rawData = XLSX.utils.sheet_to_json(worksheet);
+            if (rawData.length > 0) {
+                headers = Object.keys(rawData[0]);
+            } else {
+                headers = [];
+            }
+            displayData();
         }
+
+        function displayData() {
+            const dataView = document.getElementById('dataView');
+            dataView.classList.remove('hidden');
+
+            const dataTable = document.getElementById('dataTable');
+            dataTable.innerHTML = '';
+
+            let thead = dataTable.createTHead();
+            let row = thead.insertRow();
+            headers.forEach(header => {
+                let th = document.createElement('th');
+                th.textContent = header;
+                row.appendChild(th);
+            });
+
+            let tbody = dataTable.createTBody();
+            rawData.slice(0, 50).forEach(rowData => {
+                let tr = tbody.insertRow();
+                headers.forEach(header => {
+                    let td = tr.insertCell();
+                    td.textContent = rowData[header] !== undefined ? rowData[header] : '';
+                });
+            });
+
+            populateDropdowns();
+        }
+
+        function populateDropdowns() {
+            const selectElements = ['pivotRows', 'pivotCols', 'pivotValues', 'chartXAxis', 'chartYAxis', 'chartSliceBy'];
+            selectElements.forEach(id => {
+                const select = document.getElementById(id);
+                select.innerHTML = '<option value="">--Select--</option>';
+                headers.forEach(header => {
+                    const option = document.createElement('option');
+                    option.value = header;
+                    option.textContent = header;
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        function generatePivotTable() {
+            const rowsField = document.getElementById('pivotRows').value;
+            const colsField = document.getElementById('pivotCols').value;
+            const valuesField = document.getElementById('pivotValues').value;
+            const aggType = document.getElementById('pivotAgg').value;
+
+            if (!rowsField || !valuesField) {
+                alert('Please select at least Rows and Values for pivot analysis.');
+                return;
+            }
+
+            const pivotTable = {};
+            const colHeaders = new Set();
+            const rowHeaders = new Set();
+
+            rawData.forEach(item => {
+                const rowKey = item[rowsField];
+                const colKey = colsField ? item[colsField] : 'Total';
+                const value = parseFloat(item[valuesField]);
+
+                if (isNaN(value)) return;
+
+                rowHeaders.add(rowKey);
+                colHeaders.add(colKey);
+
+                if (!pivotTable[rowKey]) {
+                    pivotTable[rowKey] = {};
+                }
+                if (!pivotTable[rowKey][colKey]) {
+                    pivotTable[rowKey][colKey] = [];
+                }
+                pivotTable[rowKey][colKey].push(value);
+            });
+
+            const sortedRowHeaders = Array.from(rowHeaders).sort();
+            const sortedColHeaders = Array.from(colHeaders).sort();
+
+            const tableElement = document.getElementById('pivotTable');
+            tableElement.innerHTML = '';
+
+            let thead = tableElement.createTHead();
+            let headRow = thead.insertRow();
+            let cornerTh = document.createElement('th');
+            cornerTh.textContent = rowsField + (colsField ? ' / ' + colsField : '');
+            headRow.appendChild(cornerTh);
+            sortedColHeaders.forEach(col => {
+                let th = document.createElement('th');
+                th.textContent = col;
+                headRow.appendChild(th);
+            });
+            let totalColTh = document.createElement('th');
+            totalColTh.textContent = 'Row Total';
+            headRow.appendChild(totalColTh);
+
+
+            let tbody = tableElement.createTBody();
+            sortedRowHeaders.forEach(rowKey => {
+                let tr = tbody.insertRow();
+                let th = document.createElement('th');
+                th.textContent = rowKey;
+                tr.appendChild(th);
+
+                let rowTotal = 0;
+                sortedColHeaders.forEach(colKey => {
+                    let td = tr.insertCell();
+                    const values = (pivotTable[rowKey] && pivotTable[rowKey][colKey]) ? pivotTable[rowKey][colKey] : [];
+                    let result;
+                    if (values.length === 0) {
+                        result = '';
+                    } else {
+                        switch (aggType) {
+                            case 'sum': result = values.reduce((a, b) => a + b, 0); break;
+                            case 'count': result = values.length; break;
+                            case 'avg': result = values.reduce((a, b) => a + b, 0) / values.length; break;
+                            case 'min': result = Math.min(...values); break;
+                            case 'max': result = Math.max(...values); break;
+                            default: result = '';
+                        }
+                        rowTotal += result;
+                        result = result.toFixed(2);
+                    }
+                    td.textContent = result;
+                });
+                let totalTd = tr.insertCell();
+                totalTd.textContent = rowTotal.toFixed(2);
+            });
+
+            let footer = tableElement.createTFoot();
+            let footerRow = footer.insertRow();
+            let footerTh = document.createElement('th');
+            footerTh.textContent = 'Column Total';
+            footerRow.appendChild(footerTh);
+
+            let grandTotal = 0;
+            sortedColHeaders.forEach(colKey => {
+                let colTotal = 0;
+                sortedRowHeaders.forEach(rowKey => {
+                    const values = (pivotTable[rowKey] && pivotTable[rowKey][colKey]) ? pivotTable[rowKey][colKey] : [];
+                    let result;
+                    if (values.length > 0) {
+                        switch (aggType) {
+                            case 'sum': result = values.reduce((a, b) => a + b, 0); break;
+                            case 'count': result = values.length; break;
+                            case 'avg': result = values.reduce((a, b) => a + b, 0) / values.length; break;
+                            case 'min': result = Math.min(...values); break;
+                            case 'max': result = Math.max(...values); break;
+                            default: result = 0;
+                        }
+                        colTotal += result;
+                    }
+                });
+                let td = footerRow.insertCell();
+                td.textContent = colTotal.toFixed(2);
+                grandTotal += colTotal;
+            });
+            let grandTotalTd = footerRow.insertCell();
+            grandTotalTd.textContent = grandTotal.toFixed(2);
+        }
+
+        function generateChart() {
+            const chartType = document.getElementById('chartType').value;
+            const xAxisField = document.getElementById('chartXAxis').value;
+            const yAxisField = document.getElementById('chartYAxis').value;
+            const sliceByField = document.getElementById('chartSliceBy').value;
+
+            if ((chartType === 'bar' || chartType === 'line' || chartType === 'histogram') && (!xAxisField || !yAxisField)) {
+                alert('Please select X-Axis and Y-Axis for bar, line or histogram charts.');
+                return;
+            }
+            if ((chartType === 'pie' || chartType === 'doughnut') && !sliceByField) {
+                alert('Please select Slice By field for pie or doughnut charts.');
+                return;
+            }
+
+            let labels = [];
+            let data = [];
+            let backgroundColor = [];
+
+            if (chartType === 'bar' || chartType === 'line') {
+                const groupedData = {};
+                rawData.forEach(item => {
+                    const xVal = item[xAxisField];
+                    const yVal = parseFloat(item[yAxisField]);
+                    if (!isNaN(yVal)) {
+                        if (!groupedData[xVal]) {
+                            groupedData[xVal] = 0;
+                        }
+                        groupedData[xVal] += yVal;
+                    }
+                });
+                labels = Object.keys(groupedData).sort();
+                data = labels.map(label => groupedData[label]);
+                backgroundColor = labels.map(() => `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.6)`);
+            } else if (chartType === 'pie' || chartType === 'doughnut') {
+                const groupedData = {};
+                rawData.forEach(item => {
+                    const sliceVal = item[sliceByField];
+                    if (!groupedData[sliceVal]) {
+                        groupedData[sliceVal] = 0;
+                    }
+                    groupedData[sliceVal]++;
+                });
+                labels = Object.keys(groupedData).sort();
+                data = labels.map(label => groupedData[label]);
+                backgroundColor = labels.map(() => `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.6)`);
+            } else if (chartType === 'histogram') {
+                const values = rawData.map(item => parseFloat(item[yAxisField])).filter(val => !isNaN(val));
+                if (values.length === 0) {
+                    alert('No numeric data for histogram.');
+                    return;
+                }
+
+                const numBins = 10;
+                const minVal = Math.min(...values);
+                const maxVal = Math.max(...values);
+                const range = maxVal - minVal;
+                const binSize = range / numBins;
+
+                const bins = Array(numBins).fill(0);
+                labels = Array(numBins).fill(0).map((_, i) => `${(minVal + i * binSize).toFixed(2)} - ${(minVal + (i + 1) * binSize).toFixed(2)}`);
+
+                values.forEach(val => {
+                    let binIndex = Math.floor((val - minVal) / binSize);
+                    if (binIndex >= numBins) binIndex = numBins - 1; // Handle max value edge case
+                    bins[binIndex]++;
+                });
+                data = bins;
+                backgroundColor = labels.map(() => `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.6)`);
+            }
+
+            if (myChartInstance) {
+                myChartInstance.destroy();
+            }
+
+            const ctx = document.getElementById('myChart').getContext('2d');
+            myChartInstance = new Chart(ctx, {
+                type: chartType === 'histogram' ? 'bar' : chartType,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: chartType === 'histogram' ? 'Frequency' : yAxisField || sliceByField,
+                        data: data,
+                        backgroundColor: backgroundColor,
+                        borderColor: backgroundColor.map(color => color.replace('0.6', '1')),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        async function exportToExcel() {
+            if (rawData.length === 0) {
+                alert('No data to export. Please upload a file first.');
+                return;
+            }
+
+            const wb = XLSX.utils.book_new();
+
+            // Original Data Sheet
+            const wsData = XLSX.utils.json_to_sheet(rawData);
+            XLSX.utils.book_append_sheet(wb, wsData, "Original Data");
+
+            // Pivot Table Sheet
+            const pivotTableElement = document.getElementById('pivotTable');
+            if (pivotTableElement.rows.length > 0) {
+                const wsPivot = XLSX.utils.table_to_sheet(pivotTableElement);
+                XLSX.utils.book_append_sheet(wb, wsPivot, "Pivot Analysis");
+            }
+
+            // Chart Image Sheet (This is a placeholder, actual image embedding is complex for client-side JS)
+            const canvas = document.getElementById('myChart');
+            if (canvas && myChartInstance) {
+                const imgData = canvas.toDataURL('image/png');
+                const wsChart = XLSX.utils.aoa_to_sheet([["Dashboard Chart"]]);
+                XLSX.utils.        }
         .main-content {
             flex-grow: 1;
             background-color: #fff;
