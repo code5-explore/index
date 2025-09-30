@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A multichart dashboard</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background: linear-gradient(to right, #ece9e6, #ffffff);
+    color: #333;
+  }
+  .container {
+    max-width: 1300px;
+    margin: auto;
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  }
+  h1 {
+    text-align: center;
+    color: #0056b3;
+    margin-bottom: 30px;
+    font-size: 2.5em;
+    font-weight: 700;
+  }
+  .upload-section, .controls {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
+  }
+  label {
+    font-weight: bold;
+    color: #555;
+    white-space: nowrap;
+  }
+  select, input[type="file"] {
+    padding: 10px 15px;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    background-color: #ffffff;
+    transition: all 0.3s ease;
+    font-size: 1em;
+    color: #333;
+  }
+  select:focus, input[type="file"]:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    outline: none;
+  }
+  input[type="file"]::-webkit-file-upload-button {
+    background-color: #007bff;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    margin-right: 10px;
+    transition: background-color 0.3s ease;
+  }
+  input[type="file"]::-webkit-file-upload-button:hover {
+    background-color: #0056b3;
+  }
+  button {
+    padding: 10px 25px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1.1em;
+    font-weight: bold;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+  }
+  button:hover {
+    background-color: #218838;
+    transform: translateY(-2px);
+  }
+  button:active {
+    transform: translateY(0);
+  }
+  .charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 30px;
+    justify-content: center;
+  }
+  .chart-container {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 350px;
+    max-height: 450px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  canvas {
+    max-width: 100%;
+    max-height: 100%;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>An interactive dashboard for exploratory data visualization.</h1>
+
+  <div class="upload-section">
+    <label for="fileInput">Upload Excel or CSV:</label>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+  </div>
+
+  <div class="controls">
+    <label for="chartTypeSelect">Select Chart Types:</label>
+    <select id="chartTypeSelect" multiple size="3">
+      <option value="bar">Bar Chart</option>
+      <option value="line">Line Chart</option>
+      <option value="pie">Pie Chart</option>
+    </select>
+
+    <label for="filterSelect">Filter by Column:</label>
+    <select id="filterSelect">
+      <option value="">-- Select Filter --</option>
+    </select>
+
+    <label for="filterValueSelect">Filter Value:</label>
+    <select id="filterValueSelect" disabled>
+      <option value="">-- Select Value --</option>
+    </select>
+
+    <button id="renderBtn">Render Charts</button>
+  </div>
+
+  <div class="charts" id="chartsContainer">
+    <!-- Charts will be rendered here -->
+  </div>
+</div>
+
+<!-- Load SheetJS -->
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<!-- Load Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  let rawData = [];
+  let headers = [];
+  let charts = {}; // Store chart instances
+
+  const fileInput = document.getElementById('fileInput');
+  const chartTypeSelect = document.getElementById('chartTypeSelect');
+  const filterSelect = document.getElementById('filterSelect');
+  const filterValueSelect = document.getElementById('filterValueSelect');
+  const renderBtn = document.getElementById('renderBtn');
+  const chartsContainer = document.getElementById('chartsContainer');
+
+  fileInput.addEventListener('change', handleFile, false);
+  filterSelect.addEventListener('change', handleFilterChange);
+  renderBtn.addEventListener('click', renderCharts);
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = function(event) {
+      let workbook;
+      const fileType = file.name.split('.').pop().toLowerCase();
+
+      try {
+        if (fileType === 'csv') {
+          workbook = XLSX.read(event.target.result, { type: 'string' });
+        } else { // xlsx, xls
+          workbook = XLSX.read(event.target.result, { type: 'array' });
+        }
+      } catch (err) {
+        alert('Error reading file: ' + err.message);
+        return;
+      }
+
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+      if (jsonData.length === 0) {
+        alert('No data found in the file.');
+        return;
+      }
+
+      rawData = jsonData;
+      headers = Object.keys(jsonData[0]);
+
+      populateFilterDropdown();
+      clearCharts();
+    };
+
+    if (file.name.endsWith('.csv')) {
+      reader.readAsText(file);
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
+  }
+
+  function populateFilterDropdown() {
+    filterSelect.innerHTML = '<option value="">-- Select Filter --</option>';
+    headers.forEach(h => {
+      const option = document.createElement('option');
+      option.value = h;
+      option.textContent = h;
+      filterSelect.appendChild(option);
+    });
+    filterValueSelect.innerHTML = '<option value="">-- Select Value --</option>';
+    filterValueSelect.disabled = true;
+  }
+
+  function handleFilterChange() {
+    const selectedColumn = filterSelect.value;
+    filterValueSelect.innerHTML = '<option value="">-- Select Value --</option>';
+
+    if (!selectedColumn) {
+      filterValueSelect.disabled = true;
+      return;
+    }
+
+    const uniqueValues = [...new Set(rawData.map(row => row[selectedColumn]))]
+                          .filter(v => v !== null && v !== undefined && v !== '');
+
+    uniqueValues.sort().forEach(val => {
+      const option = document.createElement('option');
+      option.value = val;
+      option.textContent = val;
+      filterValueSelect.appendChild(option);
+    });
+
+    filterValueSelect.disabled = false;
+  }
+
+  function clearCharts() {
+    for (const chartId in charts) {
+      if (charts[chartId]) {
+        charts[chartId].destroy();
+      }
+    }
+    charts = {};
+    chartsContainer.innerHTML = '';
+  }
+
+  function renderCharts() {
+    clearCharts();
+
+    if (rawData.length === 0) {
+      alert('Please upload a valid Excel or CSV file first.');
+      return;
+    }
+
+    const selectedCharts = Array.from(chartTypeSelect.selectedOptions).map(opt => opt.value);
+    if (selectedCharts.length === 0) {
+      alert('Please select at least one chart type.');
+      return;
+    }
+
+    const filterColumn = filterSelect.value;
+    const filterValue = filterValueSelect.value;
+
+    let filteredData = rawData;
+    if (filterColumn && filterValue) {
+      filteredData = rawData.filter(row => String(row[filterColumn]) === String(filterValue));
+    }
+
+    if (filteredData.length === 0) {
+      alert('No data available for the selected filter.');
+      return;
+    }
+
+    const numericColumns = headers.filter(h => filteredData.every(row => !isNaN(parseFloat(row[h])) && row[h] !== ''));
+
+    if (numericColumns.length === 0) {
+      alert('No numeric columns found to plot. Please ensure your data contains numbers.');
+      return;
+    }
+
+    const categoryColumn = headers[0];
+    const dataColumns = numericColumns.slice(0, Math.min(numericColumns.length, 2));
+
+    selectedCharts.forEach((chartType, index) => {
+      const chartDiv = document.createElement('div');
+      chartDiv.className = 'chart-container';
+
+      const canvas = document.createElement('canvas');
+      canvas.id = `chart-${chartType}-${index}`;
+      chartDiv.appendChild(canvas);
+      chartsContainer.appendChild(chartDiv);
+
+      let chartData;
+      let chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              font: {
+                size: 14
+              },
+              color: '#555'
+            }
+          },
+          title: {
+            display: true,
+            text: `${chartType.charAt(0).toUpperCase() + chartType.slice(1)} Chart: ${dataColumns.join(' vs ')} by ${categoryColumn}`,
+            font: {
+              size: 18,
+              weight: 'bold'
+            },
+            color: '#333'
+          }
+        },
+        scales: {}
+      };
+
+      if (chartType === 'pie') {
+        const pieDataMap = {};
+        filteredData.forEach(row => {
+          const cat = row[categoryColumn];
+          const val = parseFloat(row[dataColumns[0]]) || 0;
+          pieDataMap[cat] = (pieDataMap[cat] || 0) + val;
+        });
+
+        chartData = {
+          labels: Object.keys(pieDataMap),
+          datasets: [{
+            label: dataColumns[0],
+            data: Object.values(pieDataMap),
+            backgroundColor: generateColors(Object.keys(pieDataMap).length, 0.8),
+            borderColor: '#fff',
+            borderWidth: 1
+          }]
+        };
+      } else {
+        const labels = [...new Set(filteredData.map(row => row[categoryColumn]))].sort();
+        const datasets = dataColumns.map((col, idx) => {
+          const aggregatedData = labels.map(label => {
+            const sum = filteredData
+              .filter(row => row[categoryColumn] === label)
+              .reduce((acc, row) => acc + (parseFloat(row[col]) || 0), 0);
+            return sum;
+          });
+
+          const color = generateColors(1, 0.7, idx);
+          return {
+            label: col,
+            data: aggregatedData,
+            borderColor: color[0].replace('0.7)', '1)'),
+            backgroundColor: chartType === 'bar' ? color[0] : color[0].replace('0.7)', '0.2)'),
+            fill: chartType === 'line' ? false : true,
+            tension: chartType === 'line' ? 0.3 : 0,
+            borderWidth: 2
+          };
+        });
+
+        chartData = {
+          labels: labels,
+          datasets: datasets
+        };
+
+        chartOptions.scales = {
+          x: {
+            title: {
+              display: true,
+              text: categoryColumn,
+              font: {
+                size: 16,
+                weight: 'bold'
+              },
+              color: '#666'
+            },
+            ticks: {
+              color: '#666'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: dataColumns.join(', '),
+              font: {
+                size: 16,
+                weight: 'bold'
+              },
+              color: '#666'
+            },
+            beginAtZero: true,
+            ticks: {
+              color: '#666'
+            }
+          }
+        };
+      }
+
+      charts[canvas.id] = new Chart(canvas.getContext('2d'), {
+        type: chartType,
+        data: chartData,
+        options: chartOptions
+      });
+    });
+  }
+
+  function generateColors(count, alpha = 0.6, startIndex = 0) {
+    const colors = [];
+    const baseColors = [
+      `rgba(255, 99, 132, ${alpha})`, // Red
+      `rgba(54, 162, 235, ${alpha})`, // Blue
+      `rgba(255, 206, 86, ${alpha})`, // Yellow
+      `rgba(75, 192, 192, ${alpha})`, // Green
+      `rgba(153, 102, 255, ${alpha})`, // Purple
+      `rgba(255, 159, 64, ${alpha})`, // Orange
+      `rgba(200, 200, 200, ${alpha})`, // Grey
+      `rgba(100, 100, 255, ${alpha})`, // Light Blue
+      `rgba(255, 100, 200, ${alpha})`, // Pink
+      `rgba(100, 255, 100, ${alpha})`  // Lime Green
+    ];
+    for (let i = 0; i < count; i++) {
+      colors.push(baseColors[(startIndex + i) % baseColors.length]);
+    }
+    return colors;
+  }
+</script>
+</body>
+</html>
+```
