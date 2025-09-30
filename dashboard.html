@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard with Excel Upload and Multi-Chart</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+  }
+  .container {
+    max-width: 1200px;
+    margin: auto;
+  }
+  .upload-section, .controls, .charts {
+    margin-bottom: 20px;
+  }
+  label {
+    font-weight: bold;
+    margin-right: 10px;
+  }
+  select, input[type="file"] {
+    padding: 5px;
+    margin-right: 20px;
+  }
+  .charts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+  }
+  .chart-container {
+    width: 400px;
+    height: 300px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Dashboard with Excel/CSV Upload and Multi-Chart</h1>
+
+  <div class="upload-section">
+    <label for="fileInput">Upload Excel or CSV:</label>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+  </div>
+
+  <div class="controls">
+    <label for="chartTypeSelect">Select Chart Types:</label>
+    <select id="chartTypeSelect" multiple size="3">
+      <option value="bar">Bar Chart</option>
+      <option value="line">Line Chart</option>
+      <option value="pie">Pie Chart</option>
+    </select>
+
+    <label for="filterSelect">Filter by Column:</label>
+    <select id="filterSelect">
+      <option value="">-- Select Filter --</option>
+    </select>
+
+    <label for="filterValueSelect">Filter Value:</label>
+    <select id="filterValueSelect" disabled>
+      <option value="">-- Select Value --</option>
+    </select>
+
+    <button id="renderBtn">Render Charts</button>
+  </div>
+
+  <div class="charts" id="chartsContainer">
+    <!-- Charts will be rendered here -->
+  </div>
+</div>
+
+<!-- Load SheetJS -->
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<!-- Load Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  let rawData = [];
+  let headers = [];
+
+  const fileInput = document.getElementById('fileInput');
+  const chartTypeSelect = document.getElementById('chartTypeSelect');
+  const filterSelect = document.getElementById('filterSelect');
+  const filterValueSelect = document.getElementById('filterValueSelect');
+  const renderBtn = document.getElementById('renderBtn');
+  const chartsContainer = document.getElementById('chartsContainer');
+
+  fileInput.addEventListener('change', handleFile, false);
+  filterSelect.addEventListener('change', handleFilterChange);
+  renderBtn.addEventListener('click', renderCharts);
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = function(event) {
+      const data = new Uint8Array(event.target.result);
+      let workbook;
+      try {
+        workbook = XLSX.read(data, { type: 'array' });
+      } catch (err) {
+        alert('Error reading file: ' + err);
+        return;
+      }
+
+      // Use first sheet
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+      if (jsonData.length === 0) {
+        alert('No data found in the file.');
+        return;
+      }
+
+      rawData = jsonData;
+      headers = Object.keys(jsonData[0]);
+
+      populateFilterDropdown();
+      clearCharts();
+    };
+
+    if (file.name.endsWith('.csv')) {
+      reader.readAsText(file);
+      reader.onload = function(event) {
+        const csvData = event.target.result;
+        const workbook = XLSX.read(csvData, { type: 'string' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+        if (jsonData.length === 0) {
+          alert('No data found in the file.');
+          return;
+        }
+
+        rawData = jsonData;
+        headers = Object.keys(jsonData[0]);
+
+        populateFilterDropdown();
+        clearCharts();
+      };
+    } else {
+      reader.readAsArrayBuffer(file);
+    }
+  }
+
+  function populateFilterDropdown() {
+    filterSelect.innerHTML = '<option value="">-- Select Filter --</option>';
+    headers.forEach(h => {
+      const option = document.createElement('option');
+      option.value = h;
+      option.textContent = h;
+      filterSelect.appendChild(option);
+    });
+    filterValueSelect.innerHTML = '<option value="">-- Select Value --</option>';
+    filterValueSelect.disabled = true;
+  }
+
+  function handleFilterChange() {
+    const selectedColumn = filterSelect.value;
+    filterValueSelect.innerHTML = '<option value="">-- Select Value --</option>';
+
+    if (!selectedColumn) {
+      filterValueSelect.disabled = true;
+      return;
+    }
+
+    // Get unique values for the selected column
+    const uniqueValues = [...new Set(rawData.map(row => row[selectedColumn]))].filter(v => v !== '');
+
+    uniqueValues.forEach(val => {
+      const option = document.createElement('option');
+      option.value = val;
+      option.textContent = val;
+      filterValueSelect.appendChild(option);
+    });
+
+    filterValueSelect.disabled = false;
+  }
+
+  function clearCharts() {
+    chartsContainer.innerHTML = '';
+  }
+
+  function renderCharts() {
+    clearCharts();
+
+    if (rawData.length === 0) {
+      alert('Please upload a valid Excel or CSV file first.');
+      return;
+    }
+
+    const selectedCharts = Array.from(chartTypeSelect.selectedOptions).map(opt => opt.value);
+    if (selectedCharts.length === 0) {
+      alert('Please select at least one chart type.');
+      return;
+    }
+
+    const filterColumn = filterSelect.value;
+    const filterValue = filterValueSelect.value;
+
+    // Filter data if filter is applied
+    let filteredData = rawData;
+    if (filterColumn && filterValue) {
+      filteredData = rawData.filter(row => row[filterColumn] == filterValue);
+    }
+
+    if (filteredData.length === 0) {
+      alert('No data available for the selected filter.');
+      return;
+    }
+
+    // For demo, we will try to plot the first two numeric columns against the first column (assumed category)
+    // Find numeric columns
+    const numericColumns = headers.filter(h => filteredData.every(row => !isNaN(parseFloat(row[h])) && row[h] !== ''));
+
+    if (numericColumns.length === 0) {
+      alert('No numeric columns found to plot.');
+      return;
+    }
+
+    const categoryColumn = headers[0]; // Use first column as category (x-axis)
+    const dataColumns = numericColumns.slice(0, 2); // Use up to two numeric columns for demo
+
+    selectedCharts.forEach(chartType => {
+      const chartDiv = document.createElement('div');
+      chartDiv.className = 'chart-container';
+
+      const canvas = document.createElement('canvas');
+      chartDiv.appendChild(canvas);
+      chartsContainer.appendChild(chartDiv);
+
+      let chartData;
+      let chartOptions = {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: `${chartType.charAt(0).toUpperCase() + chartType.slice(1)} Chart` }
+        }
+      };
+
+      if (chartType === 'pie') {
+        // For pie chart, sum values of first numeric column grouped by category
+        const pieDataMap = {};
+        filteredData.forEach(row => {
+          const cat = row[categoryColumn];
+          const val = parseFloat(row[dataColumns[0]]) || 0;
+          pieDataMap[cat] = (pieDataMap[cat] || 0) + val;
+        });
+
+        chartData = {
+          labels: Object.keys(pieDataMap),
+          datasets: [{
+            label: dataColumns[0],
+            data: Object.values(pieDataMap),
+            backgroundColor: generateColors(Object.keys(pieDataMap).length)
+          }]
+        };
+      } else {
+        // For bar and line charts, plot dataColumns vs categoryColumn
+        chartData = {
+          labels: filteredData.map(row => row[categoryColumn]),
+          datasets: dataColumns.map((col, idx) => ({
+            label: col,
+            data: filteredData.map(row => parseFloat(row[col]) || 0),
+            borderColor: idx === 0 ? 'rgba(75, 192, 192, 1)' : 'rgba(192, 75, 192, 1)',
+            backgroundColor: idx === 0 ? 'rgba(75, 192, 192, 0.2)' : 'rgba(192, 75, 192, 0.2)',
+            fill: chartType === 'line' ? false : true,
+            tension: 0.1
+          }))
+        };
+      }
+
+      new Chart(canvas.getContext('2d'), {
+        type: chartType,
+        data: chartData,
+        options: chartOptions
+      });
+    });
+  }
+
+  function generateColors(count) {
+    const colors = [];
+    const baseColors = [
+      'rgba(255, 99, 132, 0.6)',
+      'rgba(54, 162, 235, 0.6)',
+      'rgba(255, 206, 86, 0.6)',
+      'rgba(75, 192, 192, 0.6)',
+      'rgba(153, 102, 255, 0.6)',
+      'rgba(255, 159, 64, 0.6)'
+    ];
+    for (let i = 0; i < count; i++) {
+      colors.push(baseColors[i % baseColors.length]);
+    }
+    return colors;
+  }
+</script>
+</body>
+</html>
