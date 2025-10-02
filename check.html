@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dataset Visualization Dashboard</title>
+    <!-- External Libraries -->
+    <!-- SheetJS for Excel parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- PapaParse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <!-- Plotly.js for charts -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <!-- html2canvas for capturing plots -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- jsPDF for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .upload-section {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #fileInput {
+            margin: 10px;
+            padding: 10px;
+        }
+        #loadBtn {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #loadBtn:hover {
+            background-color: #0056b3;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        #columnSelect {
+            padding: 10px;
+            margin: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .plot-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .plot-btn {
+            background-color: #28a745;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .plot-btn:hover {
+            background-color: #218838;
+        }
+        #plot {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        .export-section {
+            text-align: center;
+        }
+        .export-btn {
+            background-color: #ffc107;
+            color: #212529;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .export-btn:hover {
+            background-color: #e0a800;
+        }
+        #status {
+            text-align: center;
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #d4edda;
+            color: #155724;
+            display: none;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>Dataset Visualization Dashboard</h1>
+        
+        <div class="upload-section">
+            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" />
+            <button id="loadBtn" onclick="loadFile()">Load Dataset</button>
+        </div>
+        
+        <div id="status"></div>
+        
+        <div class="controls" id="controls" style="display: none;">
+            <select id="columnSelect">
+                <option value="">Select a numerical column</option>
+            </select>
+            <div class="plot-buttons">
+                <button class="plot-btn" onclick="generateHistogram()">Generate Histogram</button>
+                <button class="plot-btn" onclick="generateBoxplot()">Generate Boxplot</button>
+            </div>
+        </div>
+        
+        <div id="plot"></div>
+        
+        <div class="export-section" id="exportSection" style="display: none;">
+            <button class="export-btn" onclick="exportPNG()">Export as PNG</button>
+            <button class="export-btn" onclick="exportPDF()">Export as PDF</button>
+        </div>
+    </div>
+
+    <script>
+        let dataset = null;
+        let currentPlotType = null;
+
+        function showStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = isError ? 'error' : '';
+            status.style.display = 'block';
+            setTimeout(() => { status.style.display = 'none'; }, 3000);
+        }
+
+        function loadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) {
+                showStatus('Please select a file.', true);
+                return;
+            }
+
+            const fileExtension = file.name.split('.').pop().toLowerCase();
+            const reader = new FileReader();
+
+            if (fileExtension === 'csv') {
+                reader.onload = function(e) {
+                    Papa.parse(e.target.result, {
+                        header: true,
+                        complete: function(results) {
+                            dataset = results.data;
+                            processDataset();
+                        },
+                        error: function() {
+                            showStatus('Error parsing CSV file.', true);
+                        }
+                    });
+                };
+                reader.readAsText(file);
+            } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    dataset = jsonData;
+                    processDataset();
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                showStatus('Unsupported file format. Please use CSV or Excel.', true);
+            }
+        }
+
+        function processDataset() {
+            if (!dataset || dataset.length === 0) {
+                showStatus('No data loaded.', true);
+                return;
+            }
+
+            // Get headers from first row
+            const headers = Object.keys(dataset[0]);
+            const numericalColumns = headers.filter(header => {
+                // Check if column has numerical values (skip if all non-numeric)
+                return dataset.some(row => {
+                    const val = row[header];
+                    return typeof val === 'number' || (!isNaN(parseFloat(val)) && isFinite(val));
+                });
+            });
+
+            const select = document.getElementById('columnSelect');
+            select.innerHTML = '<option value="">Select a numerical column</option>';
+            numericalColumns.forEach(col => {
+                const option = document.createElement('option');
+                option.value = col;
+                option.textContent = col;
+                select.appendChild(option);
+            });
+
+            document.getElementById('controls').style.display = 'flex';
+            showStatus(`Dataset loaded: ${dataset.length} rows, ${numericalColumns.length} numerical columns.`);
+        }
+
+        function getNumericalData(column) {
+            if (!dataset || !column) return [];
+            return dataset
+                .map(row => row[column])
+                .filter(val => typeof val === 'number' || (!isNaN(parseFloat(val)) && isFinite(val)))
+                .map(val => parseFloat(val));
+        }
+
+        function generateHistogram() {
+            const select = document.getElementById('columnSelect');
+            const column = select.value;
+            if (!column) {
+                showStatus('Please select a column.', true);
+                return;
+            }
+
+            const data = getNumericalData(column);
+            if (data.length === 0) {
+                showStatus('No numerical data found for selected column.', true);
+                return;
+            }
+
+            const trace = {
+                x: data,
+                type: 'histogram',
+                name: column,
+                nbinsx: Math.min(50, data.length) // Auto bins, cap at 50
+            };
+
+            const layout = {
+                title: `Histogram of ${column}`,
+                xaxis: { title: column },
+                yaxis: { title: 'Frequency' }
+            };
+
+            Plotly.newPlot('plot', [trace], layout);
+            currentPlotType = 'histogram';
+            document.getElementById('exportSection').style.display = 'block';
+        }
+
+        function generateBoxplot() {
+            const select = document.getElementById('columnSelect');
+            const column = select.value;
+            if (!column) {
+                showStatus('Please select a column.', true);
+                return;
+            }
+
+            const data = getNumericalData(column);
+            if (data.length === 0) {
+                showStatus('No numerical data found for selected column.', true);
+                return;
+            }
+
+            const trace = {
+                y: data,
+                type: 'box',
+                name: column
+            };
+
+            const layout = {
+                title: `Boxplot of ${column}`,
+                yaxis: { title: column }
+            };
+
+            Plotly.newPlot('plot', [trace], layout);
+            currentPlotType = 'boxplot';
+            document.getElementById('exportSection').style.display = 'block';
+        }
+
+        function exportPNG() {
+            if (!currentPlotType) {
+                showStatus('No plot to export.', true);
+                return;
+            }
+            const filename = `plot_${currentPlotType}_${Date.now()}.png`;
+            Plotly.downloadImage({
+                format: 'png',
+                filename: filename,
+                width: 800,
+                height: 600
+            });
+        }
+
+        function exportPDF() {
+            if (!currentPlotType) {
+                showStatus('No plot to export.', true);
+                return;
+            }
+            const plotDiv = document.getElementById('plot');
+            html2canvas(plotDiv, { scale: 2 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jspdf.jsPDF();
+                const imgWidth = 210;
+                const pageHeight = 295;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+
+                const filename = `plot_${currentPlotType}_${Date.now()}.pdf`;
+                pdf.save(filename);
+            }).catch(err => {
+                showStatus('Error exporting PDF: ' + err.message, true);
+            });
+        }
+    </script>
+</body>
+</html>
+
