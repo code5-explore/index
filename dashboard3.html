@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Interactive Dashboard with CSV/Excel Import & Multi-Chart</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background: #f9f9f9;
+  }
+  h1 {
+    text-align: center;
+  }
+  #fileInput {
+    margin-bottom: 10px;
+  }
+  #columnSelector {
+    margin: 10px 0;
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 5px;
+    background: #fff;
+  }
+  #chartsContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: center;
+  }
+  .chart-box {
+    background: white;
+    border: 1px solid #ddd;
+    padding: 10px;
+    box-shadow: 0 0 6px #ccc;
+    width: 480px;
+  }
+  canvas {
+    max-width: 100%;
+  }
+  #exportButtons {
+    margin-top: 20px;
+    text-align: center;
+  }
+  button {
+    margin: 0 10px;
+    padding: 10px 15px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<h1>Interactive Dashboard: Import CSV/Excel & Multi-Chart Plot</h1>
+
+<input type="file" id="fileInput" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" />
+<div id="columnSelector"></div>
+
+<div id="chartsContainer"></div>
+
+<div id="exportButtons">
+  <button id="exportPNG">Export All Charts as PNG</button>
+  <button id="exportPDF">Export All Charts as PDF</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<script>
+(() => {
+  const fileInput = document.getElementById('fileInput');
+  const columnSelector = document.getElementById('columnSelector');
+  const chartsContainer = document.getElementById('chartsContainer');
+  const exportPNGBtn = document.getElementById('exportPNG');
+  const exportPDFBtn = document.getElementById('exportPDF');
+
+  let rawData = [];
+  let headers = [];
+  let charts = [];
+
+  // Utility: Clear charts and selectors
+  function clearAll() {
+    columnSelector.innerHTML = '';
+    chartsContainer.innerHTML = '';
+    charts.forEach(c => c.destroy());
+    charts = [];
+  }
+
+  // Parse CSV text to array of objects
+  function parseCSV(text) {
+    return new Promise((resolve, reject) => {
+      Papa.parse(text, {
+        header: true,
+        dynamicTyping: true,
+        skipEmptyLines: true,
+        complete: results => resolve(results.data),
+        error: err => reject(err)
+      });
+    });
+  }
+
+  // Parse Excel file to array of objects (first sheet)
+  function parseExcel(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+          resolve(json);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  // Create checkbox list for columns
+  function createColumnCheckboxes(cols) {
+    columnSelector.innerHTML = '<strong>Select columns to plot:</strong><br>';
+    cols.forEach(col => {
+      const id = 'col_' + col.replace(/\W/g, '_');
+      const label = document.createElement('label');
+      label.style.display = 'block';
+      label.style.marginBottom = '4px';
+      label.innerHTML = `<input type="checkbox" id="${id}" value="${col}" /> ${col}`;
+      columnSelector.appendChild(label);
+    });
+    // Add event listener for change
+    columnSelector.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', updateCharts);
+    });
+  }
+
+  // Extract numeric columns for plotting
+  function getNumericColumns(data) {
+    if (!data.length) return [];
+    const sample = data[0];
+    return Object.keys(sample).filter(k => typeof sample[k] === 'number' && sample[k] !== null);
+  }
+
+  // Generate datasets for Chart.js from selected columns
+  function generateDatasets(selectedCols, data) {
+    // For line, bar, histogram, box plot, regression, pie charts
+    // We'll create one dataset per selected column
+    // For pie chart, we sum values per column
+    // For regression, we do a simple linear regression on first two selected columns if numeric
+
+    // Prepare labels (x-axis) - use row index or first column if non-numeric
+    const labels = data.map((_, i) => i + 1);
+
+    const datasets = selectedCols.map((col, i) => {
+      return {
+        label: col,
+        data: data.map(row => row[col]),
+        borderColor: `hsl(${(i * 60) % 360}, 70%, 50%)`,
+        backgroundColor: `hsla(${(i * 60) % 360}, 70%, 50%, 0.5)`,
+        fill: false,
+        tension: 0.3,
+        borderWidth: 2,
+        pointRadius: 3,
+      };
+    });
+
+    return { labels, datasets };
+  }
+
+  // Create charts for selected columns
+  function updateCharts() {
+    const checkedBoxes = Array.from(columnSelector.querySelectorAll('input[type=checkbox]:checked'));
+    if (checkedBoxes.length === 0) {
+      chartsContainer.innerHTML = '';
+      charts.forEach(c => c.destroy());
+      charts = [];
+      return;
+    }
+    const selectedCols = checkedBoxes.map(cb => cb.value);
+
+    // Clear old charts
+    charts.forEach(c => c.destroy());
+    charts = [];
+    chartsContainer.innerHTML = '';
+
+    // Prepare data for charts
+    const { labels, datasets } = generateDatasets(selectedCols, rawData);
+
+    // Create container and canvas for each chart type
+    // 1. Bar Chart
+    createChartBox('Bar Chart', 'bar', labels, datasets);
+
+    // 2. Pie Chart - sum values per column, show one pie per column
+    createPieCharts(selectedCols, rawData);
+
+    // 3. Line Chart
+    createChartBox('Line Chart', 'line', labels, datasets);
+
+    // 4. Box Plot - Chart.js doesn't support box plot natively, use plugin or approximate with scatter + error bars
+    // We'll approximate box plot using Chart.js boxplot plugin (if available) or skip with a message
+    createBoxPlot(selectedCols, rawData);
+
+    // 5. Histogram - create histogram for each selected column
+    createHistograms(selectedCols, rawData);
+
+    // 6. Regression - simple linear regression on first two numeric selected columns
+    createRegressionChart(selectedCols, rawData);
+  }
+
+  // Create a chart box with title and canvas, then render Chart.js chart
+  function createChartBox(title, type, labels, datasets) {
+    const box = document.createElement('div');
+    box.className = 'chart-box';
+    const h3 = document.createElement('h3');
+    h3.textContent = title;
+    box.appendChild(h3);
+    const canvas = document.createElement('canvas');
+    box.appendChild(canvas);
+    chartsContainer.appendChild(box);
+
+    const config = {
+      type,
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    };
+    const chart = new Chart(canvas, config);
+    charts.push(chart);
+  }
+
+  // Create pie charts: one pie chart per selected column, summing values by unique categories or summing all values
+  function createPieCharts(selectedCols, data) {
+    selectedCols.forEach((col, i) => {
+      const box = document.createElement('div');
+      box.className = 'chart-box';
+      const h3 = document.createElement('h3');
+      h3.textContent = `Pie Chart: ${col}`;
+      box.appendChild(h3);
+      const canvas = document.createElement('canvas');
+      box.appendChild(canvas);
+      chartsContainer.appendChild(box);
+
+      // Aggregate data: if column is numeric, sum all values; if categorical, count occurrences
+      const colData = data.map(r => r[col]);
+      let labels = [], values = [];
+      if (colData.every(v => typeof v === 'number' && v !== null)) {
+        // Numeric: single slice with sum
+        labels = [col];
+        values = [colData.reduce((a,b) => a + (b||0), 0)];
+      } else {
+        // Categorical: count occurrences
+        const counts = {};
+        colData.forEach(v => {
+          if (v != null) counts[v] = (counts[v] || 0) + 1;
+        });
+        labels = Object.keys(counts);
+        values = Object.values(counts);
+      }
+
+      const backgroundColors = labels.map((_, idx) => `hsl(${(idx * 60) % 360}, 70%, 60%)`);
+
+      const config = {
+        type: 'pie',
+        data: {
+          labels,
+          datasets: [{
+            label: col,
+            data: values,
+            backgroundColor: backgroundColors,
+            borderColor: '#fff',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'right' }
+          }
+        }
+      };
+      const chart = new Chart(canvas, config);
+      charts.push(chart);
+    });
+  }
+
+  // Create box plot approximation using min, Q1, median, Q3, max for each selected column
+  function createBoxPlot(selectedCols, data) {
+    // Chart.js does not support box plot natively without plugins.
+    // We'll create a scatter plot with error bars to approximate box plot using min/max and quartiles.
+    // For simplicity, show a message if plugin not available.
+
+    // Calculate stats for each column
+    function quartiles(arr) {
+      const sorted = arr.filter(v => typeof v === 'number' && v !== null).sort((a,b) => a-b);
+      if (sorted.length === 0) return null;
+      const q1 = sorted[Math.floor((sorted.length / 4))];
+      const median = sorted[Math.floor((sorted.length / 2))];
+      const q3 = sorted[Math.floor((sorted.length * 3 / 4))];
+      const min = sorted[0];
+      const max = sorted[sorted.length - 1];
+      return { min, q1, median, q3, max };
+    }
+
+    const box = document.createElement('div');
+    box.className = 'chart-box';
+    const h3 = document.createElement('h3');
+    h3.textContent = 'Box Plot (approximation)';
+    box.appendChild(h3);
+    const canvas = document.createElement('canvas');
+    box.appendChild(canvas);
+    chartsContainer.appendChild(box);
+
+    // Prepare data for box plot approximation
+    const labels = selectedCols;
+    const boxData = selectedCols.map(col => {
+      const vals = data.map(r => r[col]);
+      const q = quartiles(vals);
+      if (!q) return null;
+      return {
+        min: q.min,
+        q1: q.q1,
+        median: q.median,
+        q3: q.q3,
+        max: q.max
+      };
+    });
+
+    // If any null, show message and skip
+    if (boxData.some(d => d === null)) {
+      const ctx = canvas.getContext('2d');
+      ctx.font = '16px Arial';
+      ctx.fillStyle = '#666';
+      ctx.fillText('Box plot approximation skipped: non-numeric or empty data.', 10, 50);
+      return;
+    }
+
+    // We'll plot median as points and vertical lines for min-max and Q1-Q3 ranges using scatter + error bars
+    // Chart.js 4 supports error bars via 'errorBar' plugin, but we avoid external plugins here.
+    // Instead, plot median points and vertical lines manually on canvas after chart render.
+
+    const medianDataset = {
+      label: 'Median',
+      data: boxData.map(d => d.median),
+      backgroundColor: 'rgba(75,192,192,1)',
+      borderColor: 'rgba(75,192,192,1)',
+      type: 'scatter',
+      pointRadius: 6,
+      showLine: false,
+      yAxisID: 'y'
+    };
+
+    const config = {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Range (min-max)',
+          data: boxData.map(d => d.max - d.min),
+          backgroundColor: 'rgba(0,0,0,0.1)',
+          borderWidth: 0,
+          barPercentage: 0.5,
+          categoryPercentage: 1,
+          yAxisID: 'y',
+          base: boxData.map(d => d.min)
+        }, medianDataset]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: false },
+          x: { beginAtZero: true }
+        },
+        plugins: {
+          legend: { position: 'top' }
+        }
+      },
+      plugins: [{
+        id: 'drawBoxLines',
+        afterDatasetsDraw(chart) {
+          const ctx = chart.ctx;
+          const xAxis = chart.scales.x;
+          const yAxis = chart.scales.y;
+          ctx.save();
+          ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+          ctx.lineWidth = 2;
+          boxData.forEach((d, i) => {
+            const x = xAxis.getPixelForTick(i);
+            // Draw vertical line min to max
+            const yMin = yAxis.getPixelForValue(d.min);
+            const yMax = yAxis.getPixelForValue(d.max);
+            ctx.beginPath();
+            ctx.moveTo(x, yMin);
+            ctx.lineTo(x, yMax);
+            ctx.stroke();
+            // Draw box for Q1 to Q3
+            const yQ1 = yAxis.getPixelForValue(d.q1);
+            const yQ3 = yAxis.getPixelForValue(d.q3);
+            const boxWidth = xAxis.getPixelForTick(1) - xAxis.getPixelForTick(0);
+            ctx.fillStyle = 'rgba(75,192,192,0.3)';
+            ctx.fillRect(x - boxWidth / 4, yQ3, boxWidth / 2, yQ1 - yQ3);
+            ctx.strokeRect(x - boxWidth / 4, yQ3, boxWidth / 2, yQ1 - yQ3);
+          });
+          ctx.restore();
+        }
+      }]
+    };
+
+    const chart = new Chart(canvas, config);
+    charts.push(chart);
+  }
+
+  // Create histograms for each selected column
+  function createHistograms(selectedCols, data) {
+    selectedCols.forEach((col, i) => {
+      const box = document.createElement('div');
+      box.className = 'chart-box';
+      const h3 = document.createElement('h3');
+      h3.textContent = `Histogram: ${col}`;
+      box.appendChild(h3);
+      const canvas = document.createElement('canvas');
+      box.appendChild(canvas);
+      chartsContainer.appendChild(box);
+
+      // Extract numeric values
+      const values = data.map(r => r[col]).filter(v => typeof v === 'number' && v !== null);
+      if (values.length === 0) {
+        const ctx = canvas.getContext('2d');
+        ctx.font = '16px Arial';
+        ctx.fillStyle = '#666';
+        ctx.fillText('No numeric data for histogram.', 10, 50);
+        return;
+      }
+
+      // Calculate bins (10 bins)
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const binCount = 10;
+      const binSize = (max - min) / binCount;
+      const bins = new Array(binCount).fill(0);
+      values.forEach(v => {
+        let idx = Math.floor((v - min) / binSize);
+        if (idx === binCount) idx = binCount - 1;
+        bins[idx]++;
+      });
+
+      const labels = bins.map((_, idx) => {
+        const start = (min + idx * binSize).toFixed(2);
+        const end = (min + (idx + 1) * binSize).toFixed(2);
+        return `${start} - ${end}`;
+      });
+
+      const config = {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: col,
+            data: bins,
+            backgroundColor: `hsla(${(i * 60) % 360}, 70%, 50%, 0.6)`,
+            borderColor: `hsl(${(i * 60) % 360}, 70%, 40%)`,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      };
+      const chart = new Chart(canvas, config);
+      charts.push(chart);
+    });
+  }
+
+  // Create regression chart for first two numeric selected columns
+  function createRegressionChart(selectedCols, data) {
+    if (selectedCols.length < 2) {
+      const box = document.createElement('div');
+      box.className = 'chart-box';
+      const h3 = document.createElement('h3');
+      h3.textContent = 'Regression: Select at least 2 numeric columns';
+      box.appendChild(h3);
+      chartsContainer.appendChild(box);
+      return;
+    }
+
+    // Use first two numeric columns
+    const colX = selectedCols[0];
+    const colY = selectedCols[ 1];
+
+    // Filter numeric data
+    const points = data
+      .map(row => ({ x: row[colX], y: row[colY] }))
+      .filter(p => typeof p.x === 'number' && typeof p.y === 'number' && p.x !== null && p.y !== null);
+
+    if (points.length < 2) {
+      const box = document.createElement('div');
+      box.className = 'chart-box';
+      const h3 = document.createElement('h3');
+      h3.textContent = 'Regression: Insufficient numeric data points';
+      box.appendChild(h3);
+      chartsContainer.appendChild(box);
+      return;
+    }
+
+    // Simple linear regression
+    const n = points.length;
+    const sumX = points.reduce((a, p) => a + p.x, 0);
+    const sumY = points.reduce((a, p) => a + p.y, 0);
+    const sumXY = points.reduce((a, p) => a + p.x * p.y, 0);
+    const sumXX = points.reduce((a, p) => a + p.x * p.x, 0);
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    // Generate regression line points
+    const minX = Math.min(...points.map(p => p.x));
+    const maxX = Math.max(...points.map(p => p.x));
+    const regPoints = [
+      { x: minX, y: slope * minX + intercept },
+      { x: maxX, y: slope * maxX + intercept }
+    ];
+
+    const box = document.createElement('div');
+    box.className = 'chart-box';
+    const h3 = document.createElement('h3');
+    h3.textContent = `Linear Regression: ${colY} vs ${colX}`;
+    box.appendChild(h3);
+    const canvas = document.createElement('canvas');
+    box.appendChild(canvas);
+    chartsContainer.appendChild(box);
+
+    const labels = points.map(p => p.x); // Use x values as labels if unique, else indices
+    const uniqueLabels = [...new Set(labels)].sort((a,b) => a-b);
+
+    const dataY = points.map(p => p.y);
+
+    const config = {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: `${colY} Data`,
+            data: points.map(p => ({ x: p.x, y: p.y })),
+            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            pointRadius: 4
+          },
+          {
+            label: 'Regression Line',
+            data: regPoints.map(p => ({ x: p.x, y: p.y })),
+            type: 'line',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            fill: false,
+            tension: 0,
+            pointRadius: 0,
+            borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: {
+            display: true,
+            text: `y = ${slope.toFixed(2)}x + ${intercept.toFixed(2)}`
+          }
+        },
+        scales: {
+          x: {
+            type: 'linear',
+            position: 'bottom',
+            title: { display: true, text: colX }
+          },
+          y: {
+            title: { display: true, text: colY }
+          }
+        }
+      }
+    };
+
+    const chart = new Chart(canvas, config);
+    charts.push(chart);
+  }
+
+  // File input handler
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    clearAll();
+
+    try {
+      let data;
+      if (file.name.endsWith('.csv')) {
+        const text = await file.text();
+        data = await parseCSV(text);
+      } else if (file.name.match(/\.(xlsx|xls)$/)) {
+        data = await parseExcel(file);
+      } else {
+        alert('Unsupported file type. Please use CSV or Excel.');
+        return;
+      }
+
+      rawData = data;
+      headers = Object.keys(data[0] || {});
+      createColumnCheckboxes(headers);
+
+      // Auto-select numeric columns
+      const numericCols = getNumericColumns(data);
+      columnSelector.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        if (numeric
